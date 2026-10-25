@@ -314,7 +314,7 @@ def main():
         )
     for line, (x, y) in zip(rows, windows):
         fields = line.split("\t")
-        got = int(fields[4])
+        got = int(fields[5])
         want = bisect.bisect_left(positive, y)
         want -= bisect.bisect_left(positive, x)
         if got != want:

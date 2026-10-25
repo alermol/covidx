@@ -73,6 +73,9 @@ public:
   IndexInfo index;
   std::string semantics_covered = "reference positions covered by at least one "
                                   "accepted alignment span under policy";
+  std::string semantics_features =
+      "accepted alignments overlapping the window, each counted once over its "
+      "full reference span";
   std::vector<std::string> warnings;
 
   [[nodiscard]] std::string to_json() const;

@@ -1,16 +1,16 @@
-accepted	bam	build_rss_mb	build_s	covered	examined	index_mb	partial_scope	query_rows	query_s	runs	stage	units	variant
-3534590	cs_t2t_se_cereale.bam	253.5	1.1947	158211560	3534590	15.61	False	5789	0.0413	875555	policies	1	pooled_default
-3534590	cs_t2t_se_cereale.bam	253.7	1.3228	158211560	3534590	15.61	False	5789	0.0303	875555	policies	1	per_sample
-3534590	cs_t2t_se_cereale.bam	253.7	1.4512	316423120	3534590	31.18	False	5789	0.0316	1751110	policies	2	both
-3534590	cs_t2t_se_cereale.bam	253.5	1.1997	158211560	3534590	15.61	False	5789	0.0296	875555	policies	1	min_mapq_20
-2793272	cs_t2t_se_cereale.bam	253.7	1.1493	128712423	3534590	12.99	False	5789	0.0305	716079	policies	1	min_mapq_30
-0	cs_t2t_se_cereale.bam	253.8	0.9537	0	3534590	0.06	False	5789	0.0284	0	policies	1	min_mapq_60
-0	cs_t2t_se_cereale.bam	253.7	0.9608	0	3534590	0.06	False	5789	0.0284	0	policies	1	min_mapq_255
-3534590	cs_t2t_se_cereale.bam	253.7	1.1833	158211560	3534590	15.61	False	5789	0.0301	875555	policies	1	flags_none
-3534590	cs_t2t_se_cereale.bam	253.4	1.1954	158211560	3534590	15.61	False	5789	0.0316	875555	policies	1	flags_plus_dups
-3534590	cs_t2t_se_cereale.bam	253.8	1.2175	158211560	3534590	15.61	False	5789	0.0311	875555	policies	1	include_supplementary
-3534590	cs_t2t_se_cereale.bam	253.7	1.1967	158188329	3534590	15.95	False	5789	0.0305	885920	policies	1	no_deletions
-3534590	cs_t2t_se_cereale.bam	253.5	1.4889	158211560	3534590	15.61	False	5789	0.0301	875555	policies	1	ambiguous_exclude
-3534590	cs_t2t_se_cereale.bam	254.0	3.0292	158211560	3534590	15.61	False	5789	0.0301	875555	policies	1	checksum_source
-132597	cs_t2t_se_cereale.bam	45.4	0.5146	5869292	132597	0.57	False	5003	0.0211	32627	policies	1	contigs_one
-89	cs_t2t_se_cereale.bam	45.0	0.3289	2428	89	0.01	True	5160	0.0229	12	policies	1	scope_random
+accepted	bam	build_rss_mb	build_s	covered	examined	features	index_mb	partial_scope	query_rows	query_s	runs	stage	units	variant
+3534590	cs_t2t_se_cereale.bam	255.9	1.484	158211560	3534590	3534590	26.3	False	5789	0.0268	875555	policies	1	pooled_default
+3534590	cs_t2t_se_cereale.bam	255.7	1.6325	158211560	3534590	3534590	26.3	False	5789	0.0266	875555	policies	1	per_sample
+3534590	cs_t2t_se_cereale.bam	255.7	1.7187	316423120	3534590	7069180	41.86	False	5789	0.0388	1751110	policies	2	both
+3534590	cs_t2t_se_cereale.bam	255.7	1.4864	158211560	3534590	3534590	26.3	False	5789	0.0299	875555	policies	1	min_mapq_20
+2793272	cs_t2t_se_cereale.bam	255.7	1.3876	128712423	3534590	2793272	21.53	False	5789	0.0278	716079	policies	1	min_mapq_30
+0	cs_t2t_se_cereale.bam	253.8	0.9664	0	3534590	0	0.06	False	5789	0.0242	0	policies	1	min_mapq_60
+0	cs_t2t_se_cereale.bam	253.7	0.9716	0	3534590	0	0.06	False	5789	0.0243	0	policies	1	min_mapq_255
+3534590	cs_t2t_se_cereale.bam	255.8	1.5084	158211560	3534590	3534590	26.3	False	5789	0.0308	875555	policies	1	flags_none
+3534590	cs_t2t_se_cereale.bam	255.7	1.4989	158211560	3534590	3534590	26.3	False	5789	0.0304	875555	policies	1	flags_plus_dups
+3534590	cs_t2t_se_cereale.bam	255.4	1.5085	158211560	3534590	3534590	26.3	False	5789	0.0274	875555	policies	1	include_supplementary
+3534590	cs_t2t_se_cereale.bam	255.5	1.5211	158188329	3534590	3534590	26.64	False	5789	0.0317	885920	policies	1	no_deletions
+3534590	cs_t2t_se_cereale.bam	255.7	1.7157	158211560	3534590	3534590	26.3	False	5789	0.0278	875555	policies	1	ambiguous_exclude
+3534590	cs_t2t_se_cereale.bam	256.0	3.2561	158211560	3534590	3534590	26.3	False	5789	0.0284	875555	policies	1	checksum_source
+132597	cs_t2t_se_cereale.bam	45.6	0.5328	5869292	132597	132597	0.97	False	5003	0.02	32627	policies	1	contigs_one
+89	cs_t2t_se_cereale.bam	45.0	0.3218	2428	89	89	0.01	True	5160	0.02	12	policies	1	scope_random

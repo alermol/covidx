@@ -8,8 +8,6 @@
 #include <ctime>
 #include <fstream>
 #include <iterator>
-#include <limits>
-#include <set>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -189,24 +187,6 @@ string_array(const JsonValue& object, std::string_view key,
   return value;
 }
 
-[[nodiscard]] uint64_t parse_version_major(const std::string& version) {
-  const std::size_t first = version.find('.');
-  const std::size_t second = first == std::string::npos
-                                 ? std::string::npos
-                                 : version.find('.', first + 1);
-  if (first == std::string::npos || second == std::string::npos) {
-    throw FormatError("malformed format_version '" + version + "'");
-  }
-  const std::string_view major = std::string_view(version).substr(0, first);
-  uint64_t value = 0;
-  const auto result =
-      std::from_chars(major.data(), major.data() + major.size(), value);
-  if (result.ec != std::errc{} || result.ptr != major.data() + major.size()) {
-    throw FormatError("malformed format_version '" + version + "'");
-  }
-  return value;
-}
-
 [[nodiscard]] JsonValue make_object() {
   return JsonValue::make_object();
 }
@@ -317,6 +297,7 @@ std::string Manifest::to_json() const {
     item.set("members", string_array_value(unit.members));
     set_string(item, "name", unit.name);
     set_uint(item, "total_covered", unit.total_covered);
+    set_uint(item, "total_features", unit.total_features);
     set_uint(item, "total_runs", unit.total_runs);
     units_value.array.push_back(std::move(item));
   }
@@ -342,6 +323,7 @@ std::string Manifest::to_json() const {
 
   JsonValue semantics_value = make_object();
   set_string(semantics_value, "covered", semantics_covered);
+  set_string(semantics_value, "features", semantics_features);
   root.set("semantics", std::move(semantics_value));
 
   std::vector<std::string> sorted_warnings = warnings;
@@ -364,8 +346,8 @@ Manifest Manifest::from_json(std::string_view text, std::string_view origin) {
                       "'");
   }
   manifest.format_version = require_string(root, "format_version", context);
-  if (parse_version_major(manifest.format_version) != 1) {
-    throw FormatError(context + ": unsupported format major version '" +
+  if (manifest.format_version != kFormatVersion) {
+    throw FormatError(context + ": unsupported format_version '" +
                       manifest.format_version + "'");
   }
   manifest.builder_version = require_string(root, "builder_version", context);
@@ -613,6 +595,16 @@ Manifest Manifest::from_json(std::string_view text, std::string_view origin) {
         require_uint(item, "total_covered", context + ".units");
     unit.contigs_with_runs =
         require_uint(item, "contigs_with_runs", context + ".units");
+    const JsonValue* total_features = item.find("total_features");
+    if (total_features == nullptr) {
+      throw FormatError(context +
+                        ": missing required key 'units[].total_features'");
+    }
+    if (!total_features->is_number() || !total_features->is_integer) {
+      throw FormatError(context +
+                        ": unit total_features must be an unsigned integer");
+    }
+    unit.total_features = total_features->integer;
     if (unit.kind == UnitInfo::Kind::Pooled) {
       if (unit.name != "pooled")
         throw FormatError(context + ": pooled unit must be named pooled");
@@ -705,6 +697,29 @@ Manifest Manifest::from_json(std::string_view text, std::string_view origin) {
   if (manifest.index.unit_count != manifest.units.size()) {
     throw FormatError(context + ": index.unit_count disagrees with units");
   }
+  std::unordered_map<std::string, uint64_t> sample_features;
+  for (const UnitInfo& unit : manifest.units) {
+    if (unit.kind == UnitInfo::Kind::Sample)
+      sample_features.emplace(unit.name, unit.total_features);
+  }
+  for (const UnitInfo& unit : manifest.units) {
+    if (unit.kind == UnitInfo::Kind::Sample || unit.members.empty())
+      continue;
+    uint64_t expected = 0;
+    for (const std::string& member : unit.members) {
+      const auto found = sample_features.find(member);
+      if (found == sample_features.end()) {
+        throw FormatError(context + ": unit '" + unit.name +
+                          "' has no feature-count sample member '" + member +
+                          "'");
+      }
+      expected += found->second;
+    }
+    if (unit.total_features != expected) {
+      throw FormatError(context + ": unit '" + unit.name +
+                        "' total_features disagrees with its members");
+    }
+  }
   uint64_t total_runs = 0;
   for (const UnitInfo& unit : manifest.units) {
     const auto file = manifest.files.find(unit.file);
@@ -749,6 +764,15 @@ Manifest Manifest::from_json(std::string_view text, std::string_view origin) {
   if (manifest.semantics_covered.empty()) {
     throw FormatError(context + ": semantics.covered must not be empty");
   }
+  const JsonValue* feature_semantics = semantics.find("features");
+  if (feature_semantics == nullptr) {
+    throw FormatError(context + ": missing required key 'semantics.features'");
+  }
+  if (!feature_semantics->is_string() || feature_semantics->text.empty()) {
+    throw FormatError(context +
+                      ": semantics.features must be a non-empty string");
+  }
+  manifest.semantics_features = feature_semantics->text;
 
   const JsonValue& warnings = require_array(root, "warnings", context);
   for (const JsonValue& item : warnings.array) {

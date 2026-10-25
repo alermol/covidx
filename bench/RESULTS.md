@@ -22,7 +22,7 @@ The scale build benchmark uses 10 contigs of 2,000,000,000 bp each (20 Gb total)
 # estimated_index_mb=190.7 checksum=497857
 ```
 
-The index-size model is ~20 bytes per run plus bucket entries; the estimated 190.7 MB is the run portion (10M * 20 B).
+The index-size model is ~20 bytes per run plus bucket entries; the estimated 190.7 MB is the run portion (10M * 20 B). Format 1.1.0 also stores feature-count segments, so this model covers the coverage-run portion only. For measured feature overhead and a full index breakdown, see `STRESS_RESULTS.md` and run `python3 bench/index_summary.py <index.covidx>`.
 
 | Window | Iterations | ns/query | Notes |
 |---:|---:|---:|---|

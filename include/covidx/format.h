@@ -10,10 +10,10 @@
 
 namespace covidx {
 
-// Version of the on-disk format implemented by this library.
-inline constexpr const char* kFormatVersion = "1.0.0";
+// The only on-disk format implemented by this library.
+inline constexpr const char* kFormatVersion = "1.1.0";
 // Version of the builder implementation (independent of the format version).
-inline constexpr const char* kBuilderVersion = "0.1.1";
+inline constexpr const char* kBuilderVersion = "0.2.0";
 
 // Unit file magic, exactly eight bytes with no terminator.
 inline constexpr char kUnitMagic[8] = {'C', 'O', 'V', 'I', 'D', 'X', 'U', '1'};
@@ -21,6 +21,12 @@ inline constexpr char kUnitMagic[8] = {'C', 'O', 'V', 'I', 'D', 'X', 'U', '1'};
 inline constexpr uint32_t kMetaRecordSize = 48;
 inline constexpr uint32_t kPackAlignment = 8;
 inline constexpr uint64_t kMaxContigLength = 2147483647ULL; // INT32_MAX
+
+// Unit-file header flags. Bit 0 marks a file with feature-count segments.
+inline constexpr uint32_t kUnitFlagFeatureCounts = 1;
+
+// Feature-count segments use fixed-size blocks of varint-encoded values.
+inline constexpr uint32_t kFeatureBlockSize = 64;
 
 // Layout of units built by covidx-build.
 enum class Layout { PerSample, Pooled, Both };
@@ -67,6 +73,8 @@ struct UnitInfo {
   uint64_t total_runs = 0;
   uint64_t total_covered = 0;
   uint64_t contigs_with_runs = 0;
+  // Stored for sample/pooled-only units; summed for groups and pooled units.
+  uint64_t total_features = 0;
 };
 
 // Size and CRC32 of one file listed in the manifest.

@@ -4,8 +4,8 @@
 #include "covidx/format.h"
 
 TEST_CASE("Format constants match the contract") {
-  CHECK(std::string(covidx::kFormatVersion) == "1.0.0");
-  CHECK(std::string(covidx::kBuilderVersion) == "0.1.1");
+  CHECK(std::string(covidx::kFormatVersion) == "1.1.0");
+  CHECK(std::string(covidx::kBuilderVersion) == "0.2.0");
   CHECK(covidx::kMetaRecordSize == 48);
   CHECK(covidx::kPackAlignment == 8);
   CHECK(covidx::kMaxContigLength == 2147483647ULL);

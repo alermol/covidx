@@ -2,11 +2,11 @@
 
 #include <algorithm>
 #include <atomic>
-#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -46,6 +46,23 @@ using detail::ContigRecord;
 using detail::Scope;
 using detail::UnitFileReader;
 using detail::UnitPlan;
+
+struct StringHash {
+  using is_transparent = void;
+
+  [[nodiscard]] std::size_t operator()(std::string_view value) const noexcept {
+    return std::hash<std::string_view>{}(value);
+  }
+  [[nodiscard]] std::size_t
+  operator()(const std::string& value) const noexcept {
+    return (*this)(std::string_view(value));
+  }
+};
+
+using UnitMap =
+    std::unordered_map<std::string, uint32_t, StringHash, std::equal_to<>>;
+using ScopeMap = std::unordered_map<std::string, std::vector<Region>,
+                                    StringHash, std::equal_to<>>;
 
 [[nodiscard]] std::string unit_filename(uint32_t id) {
   char buffer[32];
@@ -218,9 +235,11 @@ struct CovIndex::Impl {
   Manifest manifest;
   std::vector<ContigInfo> contigs;
   std::vector<UnitInfo> units;
-  std::unordered_map<std::string, uint32_t> unit_by_name;
-  std::unordered_map<std::string, uint32_t> contig_by_name;
-  std::unordered_map<std::string, std::vector<Region>> scope_by_contig;
+  UnitMap unit_by_name;
+  UnitMap contig_by_name;
+  ScopeMap scope_by_contig;
+  // Member sample IDs for derived feature units, resolved once at load.
+  std::vector<std::vector<uint32_t>> feature_members;
   std::vector<std::unique_ptr<UnitFileReader>> readers;
   std::unique_ptr<BuildWorkspace> workspace;
   BuildStats stats;
@@ -235,6 +254,7 @@ struct CovIndex::Impl {
     unit_by_name.clear();
     contig_by_name.clear();
     scope_by_contig.clear();
+    feature_members.clear();
     workspace.reset();
     stats = BuildStats{};
     built = false;
@@ -258,7 +278,7 @@ struct CovIndex::Impl {
   }
 
   [[nodiscard]] const UnitInfo& require_unit(std::string_view name) const {
-    const auto it = unit_by_name.find(std::string(name));
+    const auto it = unit_by_name.find(name);
     if (it == unit_by_name.end()) {
       std::string available;
       for (const UnitInfo& unit : units) {
@@ -273,7 +293,7 @@ struct CovIndex::Impl {
   }
 
   [[nodiscard]] const ContigInfo& require_contig(std::string_view name) const {
-    const auto it = contig_by_name.find(std::string(name));
+    const auto it = contig_by_name.find(name);
     if (it == contig_by_name.end()) {
       throw QueryError("unknown contig '" + std::string(name) + "'");
     }
@@ -282,33 +302,202 @@ struct CovIndex::Impl {
 
   [[nodiscard]] const std::vector<Region>&
   require_scope(std::string_view contig) const {
-    const auto it = scope_by_contig.find(std::string(contig));
+    const auto it = scope_by_contig.find(contig);
     if (it == scope_by_contig.end())
       throw QueryError("unknown contig '" + std::string(contig) + "'");
     return it->second;
   }
 
-  void validate_window(std::string_view unit_name, std::string_view contig_name,
-                       uint64_t x, uint64_t y) const {
-    const UnitInfo& unit = require_unit(unit_name);
-    const ContigInfo& contig = require_contig(contig_name);
+  struct ResolvedWindow {
+    uint32_t unit_id = 0;
+    uint32_t contig_id = 0;
+  };
+
+  [[nodiscard]] ResolvedWindow
+  resolve_unit_contig(std::string_view unit_name,
+                      std::string_view contig_name) const {
+    const auto unit_it = unit_by_name.find(unit_name);
+    if (unit_it == unit_by_name.end()) {
+      std::string available;
+      for (const UnitInfo& unit : units) {
+        if (!available.empty())
+          available += ", ";
+        available += unit.name;
+      }
+      throw QueryError("unknown unit '" + std::string(unit_name) +
+                       "' (available: " + available + ")");
+    }
+    const auto contig_it = contig_by_name.find(contig_name);
+    if (contig_it == contig_by_name.end())
+      throw QueryError("unknown contig '" + std::string(contig_name) + "'");
+    return ResolvedWindow{unit_it->second, contig_it->second};
+  }
+
+  void validate_span(const ResolvedWindow& resolved,
+                     std::string_view contig_name, uint64_t x,
+                     uint64_t y) const {
+    const ContigInfo& contig = contigs.at(resolved.contig_id);
     if (x >= y)
       throw QueryError("empty or reversed window");
     if (y > contig.length)
       throw QueryError("window exceeds contig length");
-    if (!detail::window_in_scope(require_scope(contig_name), x, y)) {
+    if (!detail::window_in_scope(require_scope(contig_name), x, y))
       throw QueryError("window is outside the indexed scope");
-    }
-    (void)unit;
+  }
+
+  [[nodiscard]] ResolvedWindow resolve_window(std::string_view unit_name,
+                                              std::string_view contig_name,
+                                              uint64_t x, uint64_t y) const {
+    const ResolvedWindow resolved = resolve_unit_contig(unit_name, contig_name);
+    validate_span(resolved, contig_name, x, y);
+    return resolved;
   }
 
   [[nodiscard]] uint64_t count(std::string_view unit, std::string_view contig,
                                uint64_t x, uint64_t y) const {
-    validate_window(unit, contig, x, y);
-    const uint32_t unit_id = unit_by_name.at(std::string(unit));
-    const uint32_t contig_id = contig_by_name.at(std::string(contig));
-    const detail::RunIndexView view = readers.at(unit_id)->view(contig_id);
+    const ResolvedWindow resolved = resolve_window(unit, contig, x, y);
+    const detail::RunIndexView view =
+        readers.at(resolved.unit_id)->view(resolved.contig_id);
     return detail::covered_count(view, x, y);
+  }
+
+  void validate_feature_units() const {
+    std::unordered_map<std::string, uint64_t> sample_features;
+    for (const UnitInfo& unit : units) {
+      if (unit.kind != UnitInfo::Kind::Sample)
+        continue;
+      const detail::UnitFileReader& reader = *readers.at(unit.id);
+      if (!reader.has_feature_counts()) {
+        throw FormatError("sample unit '" + unit.name +
+                          "' has no feature counts");
+      }
+      uint64_t total = 0;
+      for (uint32_t contig = 0; contig < contigs.size(); ++contig)
+        total += reader.feature_total(contig);
+      if (total != unit.total_features) {
+        throw FormatError("sample unit '" + unit.name +
+                          "' feature total disagrees with its unit file");
+      }
+      sample_features.emplace(unit.name, total);
+    }
+    for (const UnitInfo& unit : units) {
+      const detail::UnitFileReader& reader = *readers.at(unit.id);
+      const bool direct =
+          unit.kind == UnitInfo::Kind::Sample || unit.members.empty();
+      if (direct) {
+        if (unit.kind == UnitInfo::Kind::Pooled) {
+          if (!reader.has_feature_counts()) {
+            throw FormatError("pooled unit has no feature counts");
+          }
+          uint64_t total = 0;
+          for (uint32_t contig = 0; contig < contigs.size(); ++contig)
+            total += reader.feature_total(contig);
+          if (total != unit.total_features) {
+            throw FormatError(
+                "pooled unit feature total disagrees with its unit file");
+          }
+        }
+        continue;
+      }
+      if (reader.has_feature_counts()) {
+        throw FormatError("derived unit '" + unit.name +
+                          "' must not store duplicate feature counts");
+      }
+      uint64_t expected = 0;
+      for (const std::string& member : unit.members) {
+        const auto found = sample_features.find(member);
+        if (found == sample_features.end()) {
+          throw FormatError("unit '" + unit.name +
+                            "' refers to a sample without feature counts");
+        }
+        expected += found->second;
+      }
+      if (expected != unit.total_features) {
+        throw FormatError("derived unit '" + unit.name +
+                          "' feature total disagrees with its members");
+      }
+    }
+  }
+
+  void rebuild_feature_members() {
+    feature_members.assign(units.size(), {});
+    for (const UnitInfo& unit : units) {
+      if (unit.kind == UnitInfo::Kind::Sample || unit.members.empty())
+        continue;
+      std::vector<uint32_t>& members = feature_members.at(unit.id);
+      members.reserve(unit.members.size());
+      for (const std::string& member : unit.members) {
+        const auto found = unit_by_name.find(member);
+        if (found == unit_by_name.end()) {
+          throw FormatError("unit '" + unit.name +
+                            "' refers to an unknown feature member");
+        }
+        if (units.at(found->second).kind != UnitInfo::Kind::Sample) {
+          throw FormatError("unit '" + unit.name +
+                            "' has a non-sample feature member");
+        }
+        members.push_back(found->second);
+      }
+    }
+  }
+
+  [[nodiscard]] uint64_t feature_count(std::string_view unit_name,
+                                       std::string_view contig_name, uint64_t x,
+                                       uint64_t y) const {
+    const ResolvedWindow resolved =
+        resolve_window(unit_name, contig_name, x, y);
+    const UnitInfo& unit = units.at(resolved.unit_id);
+    if (unit.kind == UnitInfo::Kind::Sample || unit.members.empty()) {
+      return readers.at(resolved.unit_id)
+          ->feature_count(resolved.contig_id, x, y);
+    }
+    if (feature_members.size() != units.size()) {
+      throw FormatError("feature members are not initialized");
+    }
+    uint64_t total = 0;
+    for (uint32_t member : feature_members.at(resolved.unit_id)) {
+      total += readers.at(member)->feature_count(resolved.contig_id, x, y);
+    }
+    return total;
+  }
+
+  [[nodiscard]] std::vector<uint64_t>
+  feature_counts(std::string_view unit_name, std::string_view contig_name,
+                 std::span<const QuerySpan> spans) const {
+    const ResolvedWindow resolved = resolve_unit_contig(unit_name, contig_name);
+    const ContigInfo& contig = contigs.at(resolved.contig_id);
+    const std::vector<Region>& scope = require_scope(contig_name);
+    for (const QuerySpan& span : spans) {
+      if (span.start >= span.end)
+        throw QueryError("empty or reversed window");
+      if (span.end > contig.length)
+        throw QueryError("window exceeds contig length");
+      if (!detail::window_in_scope(scope, span.start, span.end))
+        throw QueryError("window is outside the indexed scope");
+    }
+    std::vector<uint64_t> out(spans.size(), 0);
+    if (spans.empty())
+      return out;
+
+    std::vector<std::pair<uint64_t, uint64_t>> windows;
+    windows.reserve(spans.size());
+    for (const QuerySpan& span : spans)
+      windows.emplace_back(span.start, span.end);
+
+    const UnitInfo& unit = units.at(resolved.unit_id);
+    if (unit.kind == UnitInfo::Kind::Sample || unit.members.empty()) {
+      readers.at(resolved.unit_id)
+          ->feature_counts(resolved.contig_id, windows, out, false);
+      return out;
+    }
+    if (feature_members.size() != units.size()) {
+      throw FormatError("feature members are not initialized");
+    }
+    for (uint32_t member : feature_members.at(resolved.unit_id)) {
+      readers.at(member)->feature_counts(resolved.contig_id, windows, out,
+                                         true);
+    }
+    return out;
   }
 };
 
@@ -420,8 +609,11 @@ void CovIndex::build(const std::string& bam_path, const BuildOptions& options) {
       pool.submit([&, plan] {
         const std::string filename = unit_filename(plan.id);
         const fs::path path = workspace->data_dir() / filename;
+        const bool stores_features =
+            plan.kind == UnitInfo::Kind::Sample || plan.direct_from_reads;
         detail::UnitFileWriter writer(path.string(), plan.id,
-                                      static_cast<uint32_t>(contigs.size()));
+                                      static_cast<uint32_t>(contigs.size()),
+                                      stores_features);
         UnitInfo info;
         info.id = plan.id;
         info.name = plan.name;
@@ -436,9 +628,26 @@ void CovIndex::build(const std::string& bam_path, const BuildOptions& options) {
                   .string());
           const std::vector<detail::Run> runs = reader.read_all();
           const uint64_t length = contigs[contig_id].length;
+          std::vector<uint32_t> feature_start;
+          std::vector<uint32_t> feature_end;
+          if (stores_features) {
+            detail::FeatureSpoolReader feature_reader(
+                detail::feature_spool_path_for_unit(
+                    *workspace, plan, static_cast<uint32_t>(contig_id))
+                    .string());
+            detail::FeatureSpan span;
+            while (feature_reader.next(span)) {
+              feature_start.push_back(span.start);
+              feature_end.push_back(span.end);
+            }
+            if (!std::is_sorted(feature_end.begin(), feature_end.end()))
+              std::sort(feature_end.begin(), feature_end.end());
+            info.total_features += feature_start.size();
+          }
           detail::UnitContigMeta meta;
           if (runs.empty()) {
-            writer.append_contig(meta, {}, {}, {}, {});
+            writer.append_contig(meta, {}, {}, {}, {}, feature_start,
+                                 feature_end);
             continue;
           }
           meta.runs = runs.size();
@@ -465,7 +674,8 @@ void CovIndex::build(const std::string& bam_path, const BuildOptions& options) {
           info.total_runs += runs.size();
           info.total_covered += cum.back();
           ++info.contigs_with_runs;
-          writer.append_contig(meta, start, end, cum, first);
+          writer.append_contig(meta, start, end, cum, first, feature_start,
+                               feature_end);
         }
         info.file_crc32 = writer.close_and_crc();
         std::error_code size_error;
@@ -479,6 +689,26 @@ void CovIndex::build(const std::string& bam_path, const BuildOptions& options) {
       });
     }
     pool.wait();
+
+    std::unordered_map<std::string, uint64_t> sample_features;
+    for (const UnitInfo& info : unit_infos) {
+      if (info.kind == UnitInfo::Kind::Sample)
+        sample_features.emplace(info.name, info.total_features);
+    }
+    for (const UnitPlan& plan : units) {
+      if (plan.kind == UnitInfo::Kind::Sample || plan.direct_from_reads)
+        continue;
+      uint64_t total = 0;
+      for (const std::string& member : plan.members) {
+        const auto found = sample_features.find(member);
+        if (found == sample_features.end()) {
+          throw FormatError("unit '" + plan.name +
+                            "' has a member without feature counts");
+        }
+        total += found->second;
+      }
+      unit_infos.at(plan.id).total_features = total;
+    }
 
     struct stat after = {};
     if (::stat(bam_path.c_str(), &after) != 0 ||
@@ -520,6 +750,7 @@ void CovIndex::build(const std::string& bam_path, const BuildOptions& options) {
 
     Manifest manifest;
     manifest.created = created_from_env();
+    manifest.format_version = kFormatVersion;
     manifest.layout = layout_name(options.layout);
     manifest.contigs = contigs;
     for (const ContigInfo& contig : contigs) {
@@ -596,8 +827,14 @@ void CovIndex::build(const std::string& bam_path, const BuildOptions& options) {
     impl_->stats.units = impl_->units.size();
     impl_->stats.contigs = impl_->contigs.size();
     impl_->stats.runs = impl_->manifest.index.total_runs;
-    impl_->built = true;
+    for (const UnitInfo& unit : impl_->units) {
+      if (unit.kind == UnitInfo::Kind::Sample || unit.members.empty())
+        impl_->stats.features += unit.total_features;
+    }
     impl_->rebuild_maps();
+    impl_->validate_feature_units();
+    impl_->rebuild_feature_members();
+    impl_->built = true;
   } catch (...) {
     if (!options.keep_work)
       workspace.reset();
@@ -850,8 +1087,14 @@ void CovIndex::load(const std::string& dir, const OpenOptions& options) {
   impl_->stats.units = impl_->units.size();
   impl_->stats.contigs = impl_->contigs.size();
   impl_->stats.runs = impl_->manifest.index.total_runs;
-  impl_->loaded = true;
   impl_->rebuild_maps();
+  impl_->validate_feature_units();
+  impl_->rebuild_feature_members();
+  for (const UnitInfo& unit : impl_->units) {
+    if (unit.kind == UnitInfo::Kind::Sample || unit.members.empty())
+      impl_->stats.features += unit.total_features;
+  }
+  impl_->loaded = true;
 }
 
 uint64_t CovIndex::covered_count(std::string_view unit, std::string_view contig,
@@ -872,6 +1115,23 @@ double CovIndex::covered_fraction(std::string_view unit,
   return static_cast<double>(count) / static_cast<double>(y - x);
 }
 
+uint64_t CovIndex::feature_count(std::string_view unit, std::string_view contig,
+                                 uint64_t x, uint64_t y) const {
+  if (!impl_ || (!impl_->built && !impl_->loaded)) {
+    throw QueryError("index is not built or loaded");
+  }
+  return impl_->feature_count(unit, contig, x, y);
+}
+
+std::vector<uint64_t>
+CovIndex::feature_counts(std::string_view unit, std::string_view contig,
+                         std::span<const QuerySpan> spans) const {
+  if (!impl_ || (!impl_->built && !impl_->loaded)) {
+    throw QueryError("index is not built or loaded");
+  }
+  return impl_->feature_counts(unit, contig, spans);
+}
+
 uint64_t CovIndex::total_covered(std::string_view unit,
                                  std::string_view contig) const {
   if (!impl_ || (!impl_->built && !impl_->loaded)) {
@@ -879,8 +1139,8 @@ uint64_t CovIndex::total_covered(std::string_view unit,
   }
   (void)impl_->require_unit(unit);
   (void)impl_->require_contig(contig);
-  const uint32_t unit_id = impl_->unit_by_name.at(std::string(unit));
-  const uint32_t contig_id = impl_->contig_by_name.at(std::string(contig));
+  const uint32_t unit_id = impl_->unit_by_name.find(unit)->second;
+  const uint32_t contig_id = impl_->contig_by_name.find(contig)->second;
   return impl_->readers.at(unit_id)->view(contig_id).total_covered;
 }
 
@@ -901,7 +1161,7 @@ const std::vector<ContigInfo>& CovIndex::contigs() const {
 const UnitInfo* CovIndex::unit(std::string_view name) const {
   if (!impl_ || (!impl_->built && !impl_->loaded))
     return nullptr;
-  const auto it = impl_->unit_by_name.find(std::string(name));
+  const auto it = impl_->unit_by_name.find(name);
   return it == impl_->unit_by_name.end() ? nullptr
                                          : &impl_->units.at(it->second);
 }
@@ -909,7 +1169,7 @@ const UnitInfo* CovIndex::unit(std::string_view name) const {
 const ContigInfo* CovIndex::contig(std::string_view name) const {
   if (!impl_ || (!impl_->built && !impl_->loaded))
     return nullptr;
-  const auto it = impl_->contig_by_name.find(std::string(name));
+  const auto it = impl_->contig_by_name.find(name);
   return it == impl_->contig_by_name.end() ? nullptr
                                            : &impl_->contigs.at(it->second);
 }

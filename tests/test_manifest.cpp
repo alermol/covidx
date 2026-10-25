@@ -110,7 +110,7 @@ TEST_CASE("manifest round-trips with full and partial scope") {
 TEST_CASE("manifest is canonical") {
   const std::string text = valid_manifest().to_json();
   CHECK(text.starts_with(
-      "{\n  \"builder_version\": \"0.1.1\",\n  \"contigs\": [\n"));
+      "{\n  \"builder_version\": \"0.2.0\",\n  \"contigs\": [\n"));
   CHECK(text.ends_with("}\n"));
   CHECK(text.find("\"generated\"") == std::string::npos);
   CHECK(text.find("\n\n") == std::string::npos);
@@ -127,7 +127,7 @@ TEST_CASE("manifest ignores unknown keys") {
 }
 
 TEST_CASE(
-    "manifest rejects missing keys, duplicate keys, and major mismatches") {
+    "manifest rejects missing keys, duplicate keys, and version mismatches") {
   CHECK_THROWS_AS((void)Manifest::from_json("{}", "test"), covidx::FormatError);
   std::string duplicate = valid_manifest().to_json();
   duplicate = replace_once(duplicate, "{\n", "{\n  \"format\": \"covidx\",\n");
@@ -135,9 +135,15 @@ TEST_CASE(
                   covidx::FormatError);
 
   std::string wrong_major = valid_manifest().to_json();
-  wrong_major = replace_once(wrong_major, "\"format_version\": \"1.0.0\"",
+  wrong_major = replace_once(wrong_major, "\"format_version\": \"1.1.0\"",
                              "\"format_version\": \"2.0.0\"");
   CHECK_THROWS_AS((void)Manifest::from_json(wrong_major, "test"),
+                  covidx::FormatError);
+
+  std::string wrong_minor = valid_manifest().to_json();
+  wrong_minor = replace_once(wrong_minor, "\"format_version\": \"1.1.0\"",
+                             "\"format_version\": \"1.0.0\"");
+  CHECK_THROWS_AS((void)Manifest::from_json(wrong_minor, "test"),
                   covidx::FormatError);
 
   std::string no_units = valid_manifest().to_json();
@@ -188,6 +194,30 @@ TEST_CASE("manifest validates scope ordering, merging, and ranges") {
                     covidx::ScopeInfo{"chr2", 0, 500}};
   manifest.index.partial_scope = false;
   CHECK_THROWS_AS((void)Manifest::from_json(manifest.to_json(), "test"),
+                  covidx::FormatError);
+}
+
+TEST_CASE("manifest feature-count metadata is mandatory") {
+  Manifest manifest = valid_manifest();
+  manifest.units[0].total_features = 2;
+  manifest.units[1].total_features = 3;
+  manifest.units[2].total_features = 5;
+  const std::string text = manifest.to_json();
+  CHECK(text.find("\"total_features\": 5") != std::string::npos);
+  CHECK(text.find("\"features\":") != std::string::npos);
+  const Manifest parsed = Manifest::from_json(text, "test");
+  CHECK(parsed.units[0].total_features == 2);
+  CHECK(parsed.units[2].total_features == 5);
+  CHECK(parsed.to_json() == text);
+
+  Manifest old_format = manifest;
+  old_format.format_version = "1.0.0";
+  CHECK_THROWS_AS((void)Manifest::from_json(old_format.to_json(), "test"),
+                  covidx::FormatError);
+
+  Manifest mismatch = manifest;
+  mismatch.units[2].total_features = 4;
+  CHECK_THROWS_AS((void)Manifest::from_json(mismatch.to_json(), "test"),
                   covidx::FormatError);
 }
 

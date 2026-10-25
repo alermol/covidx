@@ -2,22 +2,19 @@
 #include <charconv>
 #include <clocale>
 #include <cstdio>
-#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <memory>
 #include <ostream>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "common.h"
 #include "covidx/cov_index.h"
 #include "covidx/detail/bed.h"
 #include "covidx/format.h"
-#include "covidx/manifest.h"
-
-namespace fs = std::filesystem;
 
 namespace {
 
@@ -48,6 +45,10 @@ void print_help() {
       "  --no-header                      Omit the TSV header\n"
       "  --output <path|->                Output file or stdout (default: "
       "stdout)\n"
+      "\n"
+      "Output columns:\n"
+      "  chrom, start, end, unit, num_features, covered, uncovered, "
+      "covered_fraction\n"
       "\n"
       "Loading:\n"
       "  --mmap / --no-mmap               Zero-copy load when possible "
@@ -114,7 +115,18 @@ struct Window {
   std::string contig;
   uint64_t start = 0;
   uint64_t end = 0;
+  // BED input is validated before output is opened. Keep coverage and
+  // feature counts from that pass so writing the row does not repeat work.
+  uint64_t covered = 0;
+  uint64_t features = 0;
+  bool has_counts = false;
+  bool has_features = false;
 };
+
+// Decoding every feature array for a contig wins only when a query has enough
+// rows to amortize that pass. Below this cutoff, per-window block lookup is
+// cheaper.
+constexpr std::size_t kFeatureBatchMinRows = 250000;
 
 class Output {
 public:
@@ -158,16 +170,42 @@ private:
 void write_row(std::ostream& out, const covidx::CovIndex& index,
                const std::string& unit, const Window& window) {
   const uint64_t covered =
-      index.covered_count(unit, window.contig, window.start, window.end);
+      window.has_counts
+          ? window.covered
+          : index.covered_count(unit, window.contig, window.start, window.end);
+  const uint64_t features =
+      window.has_features
+          ? window.features
+          : index.feature_count(unit, window.contig, window.start, window.end);
   const uint64_t length = window.end - window.start;
   const uint64_t uncovered = length - covered;
   const double fraction =
       static_cast<double>(covered) / static_cast<double>(length);
   out << window.contig << '\t' << window.start << '\t' << window.end << '\t'
-      << unit << '\t' << covered << '\t' << uncovered << '\t'
-      << format_fraction(fraction) << '\n';
+      << unit << '\t' << features << '\t' << covered << '\t' << uncovered
+      << '\t' << format_fraction(fraction) << '\n';
   if (!out)
     throw covidx::OutputError("write error on query output");
+}
+
+void fill_batch_features(const covidx::CovIndex& index, const std::string& unit,
+                         std::vector<Window>& windows) {
+  std::unordered_map<std::string, std::vector<std::size_t>> by_contig;
+  for (std::size_t i = 0; i < windows.size(); ++i)
+    by_contig[windows[i].contig].push_back(i);
+  for (const auto& [contig, indices] : by_contig) {
+    std::vector<covidx::QuerySpan> spans;
+    spans.reserve(indices.size());
+    for (std::size_t row : indices) {
+      spans.push_back(covidx::QuerySpan{windows[row].start, windows[row].end});
+    }
+    const std::vector<uint64_t> counts =
+        index.feature_counts(unit, contig, spans);
+    for (std::size_t i = 0; i < indices.size(); ++i) {
+      windows[indices[i]].features = counts[i];
+      windows[indices[i]].has_features = true;
+    }
+  }
 }
 
 [[nodiscard]] std::vector<Window> tile(uint64_t start, uint64_t end,
@@ -258,8 +296,8 @@ int main(int argc, char** argv) {
     cli::Args args(argc, argv,
                    {"index", "unit", "bed", "region", "window", "step",
                     "contig", "output", "validation"},
-                   {"one-based", "zero-based", "no-header", "mmap", "no-mmap",
-                    "validate-crc", "no-validate-crc", "list-units",
+                   {"one-based", "zero-based", "no-header", "mmap",
+                    "no-mmap", "validate-crc", "no-validate-crc", "list-units",
                     "list-contigs", "version", "help"});
 
     if (args.flag("help")) {
@@ -407,14 +445,25 @@ int main(int argc, char** argv) {
     if (args.has("bed")) {
       const auto records = covidx::detail::read_bed(args.get("bed"));
       for (const auto& record : records) {
+        uint64_t covered = 0;
         try {
-          (void)index.covered_count(unit, record.contig, record.start,
-                                    record.end);
+          covered = index.covered_count(unit, record.contig, record.start,
+                                        record.end);
         } catch (const covidx::QueryError& error) {
           throw covidx::QueryError("BED line " + std::to_string(record.line) +
                                    ": " + error.what());
         }
-        windows.push_back(Window{record.contig, record.start, record.end});
+        windows.push_back(
+            Window{record.contig, record.start, record.end, covered, 0, true});
+      }
+      if (windows.size() >= kFeatureBatchMinRows) {
+        fill_batch_features(index, unit, windows);
+      } else {
+        for (Window& window : windows) {
+          window.features = index.feature_count(unit, window.contig,
+                                                window.start, window.end);
+          window.has_features = true;
+        }
       }
     } else if (args.has("region")) {
       const ParsedRegion region =
@@ -458,6 +507,9 @@ int main(int argc, char** argv) {
         }
       }
     }
+    if (!args.has("bed") && windows.size() >= kFeatureBatchMinRows) {
+      fill_batch_features(index, unit, windows);
+    }
 
     // Create/truncate the output only after all query input has been read and
     // validated. In particular, --bed FILE --output FILE must not truncate the
@@ -465,8 +517,10 @@ int main(int argc, char** argv) {
     // file behind.
     Output output(output_path);
     std::ostream& out = output.stream();
-    if (header)
-      out << "#chrom\tstart\tend\tunit\tcovered\tuncovered\tcovered_fraction\n";
+    if (header) {
+      out << "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
+             "covered_fraction\n";
+    }
     for (const Window& window : windows)
       write_row(out, index, unit, window);
     output.finish();

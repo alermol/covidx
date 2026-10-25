@@ -1,14 +1,14 @@
-bam_mb	build_s	case	detail	exit	ok	runs	stage
-0.73	0.0246	ref_m	ok: 253 windows on chr1	0	True	701	reference
-0.74	0.0257	ref_deletions	ok: 253 windows on chr1	0	True	547	reference
-0.73	0.0293	ref_skips	ok: 253 windows on chr1	0	True	1456	reference
-0.75	0.0281	ref_indels	ok: 253 windows on chr1	0	True	645	reference
-0.73	0.0265	ref_softclip	ok: 253 windows on chr1	0	True	1610	reference
-0.73	0.0274	ref_hardclip	ok: 253 windows on chr1	0	True	701	reference
-0.73	0.0264	ref_eqx	ok: 253 windows on chr1	0	True	701	reference
-0.85	0.0313	ref_mixed	ok: 253 windows on chr1	0	True	791	reference
-0.74	0.0297	ref_del_gap	ok: 253 windows on chr1	0	True	2008	reference
-0.79	0.0264	ref_n_cover	ok: 253 windows on chr1	0	True	687	reference
-0.79	0.0437	ref_n_exclude	ok: 253 windows on chr1	0	True	8511	reference
-0.89	0.0363	ref_flags_mapq	ok: 253 windows on chr1	0	True	2581	reference
-0.86	0.0335	ref_include_supp	ok: 253 windows on chr1	0	True	1408	reference
+bam_mb	build_s	case	detail	exit	features	ok	runs	stage
+0.73	0.0244	ref_m	ok: 253 windows on chr1 (289228 covered positions, 10000 feature spans)	0	20000	True	701	reference
+0.74	0.0335	ref_deletions	ok: 253 windows on chr1 (291683 covered positions, 10000 feature spans)	0	20000	True	547	reference
+0.73	0.0274	ref_skips	ok: 253 windows on chr1 (288767 covered positions, 10000 feature spans)	0	20000	True	1456	reference
+0.75	0.0254	ref_indels	ok: 253 windows on chr1 (291239 covered positions, 10000 feature spans)	0	20000	True	645	reference
+0.73	0.0257	ref_softclip	ok: 253 windows on chr1 (276301 covered positions, 10000 feature spans)	0	20000	True	1610	reference
+0.73	0.0257	ref_hardclip	ok: 253 windows on chr1 (289228 covered positions, 10000 feature spans)	0	20000	True	701	reference
+0.73	0.0248	ref_eqx	ok: 253 windows on chr1 (289228 covered positions, 10000 feature spans)	0	20000	True	701	reference
+0.85	0.0319	ref_mixed	ok: 253 windows on chr1 (294215 covered positions, 10000 feature spans)	0	20000	True	791	reference
+0.74	0.0297	ref_del_gap	ok: 253 windows on chr1 (289976 covered positions, 10000 feature spans)	0	20000	True	2008	reference
+0.79	0.0235	ref_n_cover	ok: 253 windows on chr1 (289228 covered positions, 10000 feature spans)	0	20000	True	687	reference
+0.79	0.0458	ref_n_exclude	ok: 253 windows on chr1 (284928 covered positions, 10000 feature spans)	0	20000	True	8511	reference
+0.89	0.032	ref_flags_mapq	ok: 253 windows on chr1 (262347 covered positions, 5300 feature spans)	0	10600	True	2581	reference
+0.86	0.0309	ref_include_supp	ok: 253 windows on chr1 (286328 covered positions, 7900 feature spans)	0	15800	True	1408	reference

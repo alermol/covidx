@@ -20,9 +20,6 @@ public:
   [[nodiscard]] uint32_t value() const {
     return value_ ^ 0xFFFFFFFFu;
   }
-  void reset() {
-    value_ = 0xFFFFFFFFu;
-  }
 
   [[nodiscard]] static uint32_t compute(const void* data, std::size_t n) {
     CRC32 crc;

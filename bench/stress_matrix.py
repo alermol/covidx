@@ -259,6 +259,9 @@ class Stress:
                     unit["total_covered"] for unit in manifest["units"]
                 ),
                 "units": len(manifest["units"]),
+                "features": sum(
+                    unit["total_features"] for unit in manifest["units"]
+                ),
                 "accepted": manifest["source"]["records_accepted"],
                 "examined": manifest["source"]["records_examined"],
                 "partial_scope": manifest["index"]["partial_scope"],
@@ -505,6 +508,7 @@ class Stress:
                 index_mb=built["index_mb"],
                 units=built["units"],
                 runs=built["runs"],
+                features=built["features"],
                 accepted=built["accepted"],
                 examined=built["examined"],
                 load_s=load["wall_s"],
@@ -579,6 +583,7 @@ class Stress:
                 build_rss_mb=built["maxrss_mb"],
                 index_mb=built["index_mb"],
                 runs=built["runs"],
+                features=built["features"],
                 accepted=built["accepted"],
                 units=built["units"],
                 query_s=query["wall_s"],
@@ -684,6 +689,7 @@ class Stress:
                 build_rss_mb=built["maxrss_mb"],
                 index_mb=built["index_mb"],
                 runs=built["runs"],
+                features=built["features"],
                 covered=built["covered"],
                 accepted=built["accepted"],
                 examined=built["examined"],
@@ -837,6 +843,10 @@ class Stress:
                 index=label,
                 index_mb=round(tree_size(index) / (1024 * 1024), 2),
                 runs=manifest_here["index"]["total_runs"],
+                features=sum(
+                    unit["total_features"]
+                    for unit in manifest_here["units"]
+                ),
                 load_s=load["wall_s"],
                 load_rss_mb=load["maxrss_mb"],
                 query_s=query["wall_s"],
@@ -844,6 +854,75 @@ class Stress:
                 ns_per_row=round(
                     query["wall_s"] * 1e9 / max(query["rows"], 1), 1
                 ),
+            )
+
+        # Feature queries: pooled summation and the large-input batch path.
+        # Every query emits feature counts, so there is no opt-in variant.
+        feature_manifest = manifest_for(multi_index)
+        sample_units = [
+            item["name"]
+            for item in feature_manifest["units"]
+            if item["kind"] == "sample"
+        ]
+        feature_bed = self.work / "query" / "feature_windows.bed"
+        write_windows_bed(
+            feature_bed, contigs, count=min(self.args.windows, 2000), seed=888
+        )
+        rows_by_unit = {}
+        for name in sample_units + ["pooled"]:
+            query = self.query(
+                multi_index,
+                name,
+                feature_bed,
+                tag=f"feature_sum_{name}",
+            )
+            rows_by_unit[name] = [
+                line.split("\t")
+                for line in Path(query["query_dir"]).read_text().splitlines()
+            ]
+        mismatches = 0
+        for index, row in enumerate(rows_by_unit["pooled"]):
+            member_sum = sum(
+                int(rows_by_unit[name][index][4]) for name in sample_units
+            )
+            if int(row[4]) != member_sum:
+                mismatches += 1
+        self.result(
+            "query_features",
+            variant="pooled_sum",
+            index="multi-sample both",
+            units=len(sample_units),
+            rows=len(rows_by_unit["pooled"]),
+            mismatches=mismatches,
+        )
+        full_load = self.load_only(
+            multi_index, tag="feature_full_load", validation="full"
+        )
+        self.result(
+            "query_features",
+            variant="full_validation",
+            index="multi-sample both",
+            load_s=full_load["wall_s"],
+            load_rss_mb=full_load["maxrss_mb"],
+        )
+        large_bed = self.work / "query" / "shape_bed_500k.bed"
+        if large_bed.exists():
+            large = self.query(
+                multi_index,
+                unit,
+                large_bed,
+                tag="feature_500k",
+            )
+            self.result(
+                "query_features",
+                variant="large_500k",
+                index="multi-sample both",
+                rows=large["rows"],
+                query_s=large["wall_s"],
+                ns_per_row=round(
+                    large["wall_s"] * 1e9 / max(large["rows"], 1), 1
+                ),
+                query_rss_mb=large["maxrss_mb"],
             )
 
     def stage_reference(self):
@@ -973,6 +1052,7 @@ class Stress:
                 ok=measured["exit"] == 0,
                 build_s=built["wall_s"],
                 runs=built["runs"],
+                features=built["features"],
                 bam_mb=round(bam.stat().st_size / (1024 * 1024), 2),
                 detail=(
                     out.read_text().strip()[-160:]
@@ -1011,21 +1091,22 @@ class Stress:
             )
             ok = measured["exit"] == 0
             bad = 0
+            bad_features = 0
             rows = 0
             if ok:
                 for line in out.read_text().splitlines():
                     fields = line.split("\t")
-                    if len(fields) < 7:
+                    if len(fields) < 8:
                         bad += 1
+                        bad_features += 1
                         continue
                     rows += 1
-                    start, end, covered = (
-                        int(fields[1]),
-                        int(fields[2]),
-                        int(fields[4]),
-                    )
+                    start, end = int(fields[1]), int(fields[2])
+                    features, covered = int(fields[4]), int(fields[5])
                     if end <= start or covered > end - start or covered < 0:
                         bad += 1
+                    if features < 0:
+                        bad_features += 1
             self.result(
                 "correctness",
                 index=index.parent.name,
@@ -1033,7 +1114,11 @@ class Stress:
                 rows=rows,
                 bad_rows=bad,
                 query_s=measured["wall_s"],
-                full_validation_ok=ok,
+                feature_exit=measured["exit"],
+                feature_rows=rows,
+                bad_feature_rows=bad_features,
+                feature_query_s=measured["wall_s"],
+                full_validation_ok=ok and bad_features == 0,
             )
 
     @staticmethod

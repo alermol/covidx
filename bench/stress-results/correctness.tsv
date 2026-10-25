@@ -1,53 +1,53 @@
-bad_rows	exit	full_validation_ok	index	query_s	rows	stage
-0	0	True	base_800k	0.0087	40	correctness
-0	0	True	cigar_deletions	0.0099	40	correctness
-0	0	True	cigar_hardclip	0.0078	40	correctness
-0	0	True	cigar_indels	0.0071	40	correctness
-0	0	True	cigar_manyops	0.0097	40	correctness
-0	0	True	cigar_mixed	0.0077	40	correctness
-0	0	True	cigar_skips	0.0084	40	correctness
-0	0	True	cigar_softclip	0.0117	40	correctness
-0	0	True	clustered_90	0.0098	40	correctness
-0	0	True	contigs_1	0.0065	10	correctness
-0	0	True	contigs_256	0.0352	256	correctness
-0	0	True	contigs_4096	0.0481	4096	correctness
-0	0	True	contigs_64	0.014	64	correctness
-0	0	True	contigs_8192	0.0926	8192	correctness
-0	0	True	csi_10mb	0.0105	40	correctness
-0	0	True	flags_mixed	0.0089	40	correctness
-0	0	True	length_1mb_dense	0.0088	4	correctness
-0	0	True	length_500mb	0.0361	2000	correctness
-0	0	True	length_max_2gb	0.0126	2148	correctness
-0	0	True	mapq_unavailable	0.0107	40	correctness
-0	0	True	mapq_varied	0.0105	40	correctness
-0	0	True	no_rg	0.0111	40	correctness
-0	0	True	query_cs	0.0807	21434	correctness
-0	0	True	query_multisample	0.2945	21434	correctness
-0	0	True	readlen_1000	0.0087	40	correctness
-0	0	True	readlen_10000	0.009	40	correctness
-0	0	True	readlen_50	0.014	40	correctness
-0	0	True	reads_10k	0.0069	40	correctness
-0	0	True	reads_4m	0.0089	40	correctness
-0	0	True	ref_del_gap	0.007	2	correctness
-0	0	True	ref_deletions	0.0084	2	correctness
-0	0	True	ref_eqx	0.0059	2	correctness
-0	0	True	ref_flags_mapq	0.0086	2	correctness
-0	0	True	ref_hardclip	0.0088	2	correctness
-0	0	True	ref_include_supp	0.007	2	correctness
-0	0	True	ref_indels	0.0085	2	correctness
-0	0	True	ref_m	0.0059	2	correctness
-0	0	True	ref_mixed	0.0065	2	correctness
-0	0	True	ref_n_cover	0.0091	2	correctness
-0	0	True	ref_n_exclude	0.0063	2	correctness
-0	0	True	ref_skips	0.0059	2	correctness
-0	0	True	ref_softclip	0.0073	2	correctness
-0	0	True	samples_256	0.0263	20	correctness
-0	0	True	samples_64	0.0263	40	correctness
-0	0	True	samples_8	0.0325	40	correctness
-0	0	True	single_contig_many_runs	0.028	500	correctness
-0	0	True	threads_t2	0.2924	21434	correctness
-0	0	True	threads_t30	0.2911	21434	correctness
-0	0	True	threads_t4	0.3029	21434	correctness
-0	0	True	threads_t8	0.2937	21434	correctness
-0	0	True	unknown_rg	0.0206	40	correctness
-0	0	True	unmapped_tail	0.0084	40	correctness
+bad_feature_rows	bad_rows	exit	feature_exit	feature_query_s	feature_rows	full_validation_ok	index	query_s	rows	stage
+0	0	0	0	0.0279	40	True	base_800k	0.0279	40	correctness
+0	0	0	0	0.0185	40	True	cigar_deletions	0.0185	40	correctness
+0	0	0	0	0.0182	40	True	cigar_hardclip	0.0182	40	correctness
+0	0	0	0	0.0195	40	True	cigar_indels	0.0195	40	correctness
+0	0	0	0	0.0113	40	True	cigar_manyops	0.0113	40	correctness
+0	0	0	0	0.0196	40	True	cigar_mixed	0.0196	40	correctness
+0	0	0	0	0.0298	40	True	cigar_skips	0.0298	40	correctness
+0	0	0	0	0.0297	40	True	cigar_softclip	0.0297	40	correctness
+0	0	0	0	0.0175	40	True	clustered_90	0.0175	40	correctness
+0	0	0	0	0.0221	10	True	contigs_1	0.0221	10	correctness
+0	0	0	0	0.0564	256	True	contigs_256	0.0564	256	correctness
+0	0	0	0	0.0509	4096	True	contigs_4096	0.0509	4096	correctness
+0	0	0	0	0.0248	64	True	contigs_64	0.0248	64	correctness
+0	0	0	0	0.1089	8192	True	contigs_8192	0.1089	8192	correctness
+0	0	0	0	0.0294	40	True	csi_10mb	0.0294	40	correctness
+0	0	0	0	0.0179	40	True	flags_mixed	0.0179	40	correctness
+0	0	0	0	0.0215	4	True	length_1mb_dense	0.0215	4	correctness
+0	0	0	0	0.0532	2000	True	length_500mb	0.0532	2000	correctness
+0	0	0	0	0.0178	2148	True	length_max_2gb	0.0178	2148	correctness
+0	0	0	0	0.0286	40	True	mapq_unavailable	0.0286	40	correctness
+0	0	0	0	0.019	40	True	mapq_varied	0.019	40	correctness
+0	0	0	0	0.0188	40	True	no_rg	0.0188	40	correctness
+0	0	0	0	0.2063	21434	True	query_cs	0.2063	21434	correctness
+0	0	0	0	0.9316	21434	True	query_multisample	0.9316	21434	correctness
+0	0	0	0	0.0258	40	True	readlen_1000	0.0258	40	correctness
+0	0	0	0	0.0086	40	True	readlen_10000	0.0086	40	correctness
+0	0	0	0	0.0255	40	True	readlen_50	0.0255	40	correctness
+0	0	0	0	0.0072	40	True	reads_10k	0.0072	40	correctness
+0	0	0	0	0.0557	40	True	reads_4m	0.0557	40	correctness
+0	0	0	0	0.007	2	True	ref_del_gap	0.007	2	correctness
+0	0	0	0	0.0074	2	True	ref_deletions	0.0074	2	correctness
+0	0	0	0	0.0062	2	True	ref_eqx	0.0062	2	correctness
+0	0	0	0	0.0072	2	True	ref_flags_mapq	0.0072	2	correctness
+0	0	0	0	0.0062	2	True	ref_hardclip	0.0062	2	correctness
+0	0	0	0	0.008	2	True	ref_include_supp	0.008	2	correctness
+0	0	0	0	0.0069	2	True	ref_indels	0.0069	2	correctness
+0	0	0	0	0.0078	2	True	ref_m	0.0078	2	correctness
+0	0	0	0	0.0056	2	True	ref_mixed	0.0056	2	correctness
+0	0	0	0	0.0063	2	True	ref_n_cover	0.0063	2	correctness
+0	0	0	0	0.0067	2	True	ref_n_exclude	0.0067	2	correctness
+0	0	0	0	0.0062	2	True	ref_skips	0.0062	2	correctness
+0	0	0	0	0.0063	2	True	ref_softclip	0.0063	2	correctness
+0	0	0	0	0.0274	20	True	samples_256	0.0274	20	correctness
+0	0	0	0	0.0245	40	True	samples_64	0.0245	40	correctness
+0	0	0	0	0.0424	40	True	samples_8	0.0424	40	correctness
+0	0	0	0	0.0456	500	True	single_contig_many_runs	0.0456	500	correctness
+0	0	0	0	0.9046	21434	True	threads_t2	0.9046	21434	correctness
+0	0	0	0	0.9568	21434	True	threads_t30	0.9568	21434	correctness
+0	0	0	0	0.908	21434	True	threads_t4	0.908	21434	correctness
+0	0	0	0	0.937	21434	True	threads_t8	0.937	21434	correctness
+0	0	0	0	0.0395	40	True	unknown_rg	0.0395	40	correctness
+0	0	0	0	0.0201	40	True	unmapped_tail	0.0201	40	correctness

@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -46,6 +47,11 @@ struct OpenOptions {
   LogSink log;
 };
 
+struct QuerySpan {
+  uint64_t start = 0;
+  uint64_t end = 0;
+};
+
 struct BuildStats {
   uint64_t records_examined = 0;
   uint64_t records_unmapped = 0;
@@ -54,6 +60,8 @@ struct BuildStats {
   uint64_t records_no_blocks = 0;
   uint64_t records_accepted = 0;
   uint64_t runs = 0;
+  // Stored feature spans, excluding counts derived for groups and pooled.
+  uint64_t features = 0;
   uint64_t units = 0;
   uint64_t contigs = 0;
 };
@@ -82,6 +90,17 @@ public:
                                         uint64_t y) const;
   [[nodiscard]] uint64_t total_covered(std::string_view unit,
                                        std::string_view contig) const;
+
+  // Number of accepted alignments whose full reference span overlaps [x,y).
+  [[nodiscard]] uint64_t feature_count(std::string_view unit,
+                                       std::string_view contig, uint64_t x,
+                                       uint64_t y) const;
+
+  // Batch form of feature_count() for many windows on one contig. Decodes
+  // each feature array once and returns counts in the same order as spans.
+  [[nodiscard]] std::vector<uint64_t>
+  feature_counts(std::string_view unit, std::string_view contig,
+                 std::span<const QuerySpan> spans) const;
 
   [[nodiscard]] const std::vector<UnitInfo>& units() const;
   [[nodiscard]] const std::vector<ContigInfo>& contigs() const;

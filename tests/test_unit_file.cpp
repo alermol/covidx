@@ -113,6 +113,7 @@ TEST_CASE("unit metadata encodes and decodes exactly 48 bytes") {
   meta.max_bucket_population = 7;
   meta.w = 12;
   meta.flags = 3;
+  meta.feature_offset = 0x8877665544332211ULL;
   const auto bytes = meta.encode();
   CHECK(bytes.size() == 48);
   const UnitContigMeta decoded = UnitContigMeta::decode(
@@ -123,7 +124,8 @@ TEST_CASE("unit metadata encodes and decodes exactly 48 bytes") {
   CHECK(decoded.max_bucket_population == meta.max_bucket_population);
   CHECK(decoded.w == meta.w);
   CHECK(decoded.flags == meta.flags);
-  for (std::size_t i = 37; i < 48; ++i)
+  CHECK(decoded.feature_offset == meta.feature_offset);
+  for (std::size_t i = 37; i < 40; ++i)
     CHECK(bytes[i] == 0);
 }
 
@@ -207,6 +209,120 @@ TEST_CASE("unit file supports INT32_MAX contig length") {
   CHECK(covidx::detail::prefix_covered(view, length - 1) == 0);
   CHECK(covidx::detail::prefix_covered(view, length) == 1);
   reader.validate(covidx::Validation::Full);
+}
+
+TEST_CASE("unit file stores and queries multi-block feature counts") {
+  tests::TempDir temp;
+  const fs::path path = temp.path() / "features.bin";
+  const uint64_t length = 1000;
+  std::vector<uint32_t> starts;
+  std::vector<uint32_t> ends;
+  for (uint32_t i = 0; i < 150; ++i) {
+    starts.push_back(i / 2);
+    ends.push_back(i / 2 + 1);
+  }
+  {
+    UnitFileWriter writer(path.string(), 0, 1, true);
+    UnitContigMeta meta;
+    writer.append_contig(meta, {}, {}, {}, {}, starts, ends);
+    (void)writer.close_and_crc();
+  }
+
+  for (bool mmap : {true, false}) {
+    UnitFileReader reader(path.string(), {length}, mmap);
+    CHECK(reader.has_feature_counts());
+    CHECK(reader.feature_total(0) == starts.size());
+    CHECK(reader.feature_count(0, 0, 1) == 2);
+    CHECK(reader.feature_count(0, 0, 2) == 4);
+    CHECK(reader.feature_count(0, 1, 2) == 2);
+    CHECK(reader.feature_count(0, 0, 1000) == starts.size());
+    CHECK(reader.feature_count(0, 40, 45) == 10);
+    reader.validate(covidx::Validation::Full);
+  }
+}
+
+TEST_CASE("unit file interleaves coverage and feature segments") {
+  tests::TempDir temp;
+  const fs::path path = temp.path() / "mixed.bin";
+  const std::vector<Run> runs = {{0, 5}, {10, 20}};
+  const Arrays arrays = make_arrays(runs, 1000);
+  std::vector<uint32_t> starts;
+  std::vector<uint32_t> ends;
+  for (uint32_t i = 0; i < 70; ++i) {
+    starts.push_back(i * 2);
+    ends.push_back(i * 2 + 1);
+  }
+  {
+    UnitFileWriter writer(path.string(), 0, 2, true);
+    UnitContigMeta first;
+    first.runs = arrays.start.size();
+    first.total_covered = arrays.total;
+    first.max_bucket_population = 2;
+    first.w = arrays.w;
+    writer.append_contig(first, arrays.start, arrays.end, arrays.cum,
+                         arrays.first, starts, ends);
+    UnitContigMeta second;
+    const std::array<uint32_t, 2> second_starts = {5, 6};
+    const std::array<uint32_t, 2> second_ends = {10, 12};
+    writer.append_contig(second, {}, {}, {}, {}, second_starts, second_ends);
+    (void)writer.close_and_crc();
+  }
+
+  UnitFileReader reader(path.string(), {1000, 500}, true);
+  CHECK(reader.has_feature_counts());
+  CHECK(reader.feature_total(0) == 70);
+  CHECK(reader.feature_total(1) == 2);
+  CHECK(reader.feature_count(0, 0, 10) == 5);
+  CHECK(reader.feature_count(0, 4, 7) == 2);
+  CHECK(reader.feature_count(1, 4, 7) == 2);
+  CHECK(reader.view(0).runs == 2);
+  CHECK(reader.view(1).runs == 0);
+  reader.validate(covidx::Validation::Full);
+}
+
+TEST_CASE("unit file rejects feature segment corruption") {
+  tests::TempDir temp;
+  const fs::path path = temp.path() / "features.bin";
+  const uint64_t length = 1000;
+  std::vector<uint32_t> starts;
+  std::vector<uint32_t> ends;
+  for (uint32_t i = 0; i < 150; ++i) {
+    starts.push_back(i);
+    ends.push_back(i + 2);
+  }
+  {
+    UnitFileWriter writer(path.string(), 0, 1, true);
+    UnitContigMeta meta;
+    writer.append_contig(meta, {}, {}, {}, {}, starts, ends);
+    (void)writer.close_and_crc();
+  }
+  const std::string good = tests::read_file(path);
+  const std::size_t feature_offset = 112;
+  REQUIRE(good.size() > feature_offset + 64);
+
+  const auto expect_bad = [&](std::string bytes) {
+    const fs::path bad = temp.path() / "bad.bin";
+    tests::write_file(bad, bytes);
+    CHECK_THROWS_AS(UnitFileReader(bad.string(), {length}, false),
+                    covidx::FormatError);
+  };
+
+  expect_bad(patch_byte(good, feature_offset, 'X'));
+  expect_bad(patch_u32(good, feature_offset + 12, 32));
+  expect_bad(patch_u64(good, feature_offset + 16, 0));
+  expect_bad(patch_u64(good, feature_offset + 24, 0));
+  expect_bad(patch_u64(good, feature_offset + 56, 1));
+  expect_bad(good.substr(0, feature_offset + 80));
+
+  // The block "last" summaries are checked while decoding a query block.
+  const std::size_t blocks = (starts.size() + 63) / 64;
+  const std::size_t starts_last = feature_offset + 64 + blocks * 8;
+  const std::string bad_last = patch_u32(good, starts_last, 70);
+  const fs::path bad_path = temp.path() / "bad_last.bin";
+  tests::write_file(bad_path, bad_last);
+  UnitFileReader reader(bad_path.string(), {length}, false,
+                        covidx::Validation::None);
+  CHECK_THROWS_AS((void)reader.feature_count(0, 64, 65), covidx::FormatError);
 }
 
 TEST_CASE("unit file rejects structural corruption") {

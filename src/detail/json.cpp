@@ -365,7 +365,6 @@ private:
         v.integer = value;
         return v;
       }
-      is_integer = false;
     }
     double number = 0.0;
     const std::from_chars_result parsed =

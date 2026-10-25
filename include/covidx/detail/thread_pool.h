@@ -28,10 +28,6 @@ public:
   ThreadPool(const ThreadPool&) = delete;
   ThreadPool& operator=(const ThreadPool&) = delete;
 
-  [[nodiscard]] unsigned size() const {
-    return static_cast<unsigned>(workers_.size());
-  }
-
   // Enqueues a task; ignored once the pool is stopping or aborted.
   void submit(std::function<void()> task);
 

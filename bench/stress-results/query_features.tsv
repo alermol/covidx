@@ -1,0 +1,4 @@
+index	load_rss_mb	load_s	mismatches	ns_per_row	query_rss_mb	query_s	rows	stage	units	variant
+multi-sample both			0				2789	query_features	5	pooled_sum
+multi-sample both	193.0	0.7119						query_features		full_validation
+multi-sample both				3865.1	256.4	1.9356	500789	query_features		large_500k

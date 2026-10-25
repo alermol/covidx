@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "covidx/cov_index.h"
 #include "covidx/detail/bam_reader.h"
 #include "covidx/detail/build.h"
 #include "covidx/detail/run_index.h"
@@ -135,6 +136,39 @@ void check_bedtools(const fs::path& bam_path, const std::string& flags,
   }
 }
 
+std::vector<std::pair<uint64_t, uint64_t>>
+alignment_spans(const BamHeaderInfo& header, const BuildOptions& options,
+                uint32_t tid) {
+  std::vector<std::pair<uint64_t, uint64_t>> spans;
+  const uint64_t length = header.contigs.at(tid).length;
+  covidx::detail::BamRegionReader reader(header.path, static_cast<int32_t>(tid),
+                                         {{0, length}});
+  bam1_t* record = bam_init1();
+  const uint16_t exclude = covidx::detail::effective_exclude_flags(options);
+  while (reader.next(*record)) {
+    if ((record->core.flag & BAM_FUNMAP) != 0 || record->core.tid < 0 ||
+        record->core.pos < 0)
+      continue;
+    if ((record->core.flag & exclude) != 0)
+      continue;
+    if (record->core.qual < options.min_mapq)
+      continue;
+    uint64_t span = 0;
+    const uint32_t* cigar = bam_get_cigar(record);
+    for (uint32_t i = 0; i < record->core.n_cigar; ++i) {
+      const uint32_t op = cigar[i] & 0x0F;
+      if (op == 0 || op == 2 || op == 3 || op == 7 || op == 8)
+        span += cigar[i] >> 4;
+    }
+    if (span == 0)
+      continue;
+    const uint64_t start = static_cast<uint64_t>(record->core.pos);
+    spans.emplace_back(start, start + span);
+  }
+  bam_destroy1(record);
+  return spans;
+}
+
 } // namespace
 
 TEST_CASE("bedtools coverage column 5 parity (default policy)") {
@@ -155,4 +189,63 @@ TEST_CASE("bedtools coverage column 5 parity (deletions are gaps)") {
   BuildOptions options;
   options.count_deletions = false;
   check_bedtools(bam, "-Q 0 -G 0x800", options);
+}
+
+TEST_CASE("bedtools coverage column 4 parity (feature counts)") {
+  if (!tests::command_exists("bedtools")) {
+    MESSAGE("bedtools not found; skipping parity test");
+    return;
+  }
+  const fs::path bam = fs::path(COVIDX_TEST_DATA_DIR) / "tiny.bam";
+  const BamHeaderInfo header = covidx::detail::read_bam_header(bam.string());
+  BuildOptions options;
+  options.layout = covidx::Layout::Pooled;
+  const std::vector<std::pair<uint64_t, uint64_t>> spans =
+      alignment_spans(header, options, 0);
+  REQUIRE(!spans.empty());
+
+  const uint64_t length = header.contigs[0].length;
+  const std::vector<Window> windows = make_windows(length);
+
+  tests::TempDir temp;
+  std::string features_text;
+  for (const auto& [start, end] : spans) {
+    features_text +=
+        "chr1\t" + std::to_string(start) + "\t" + std::to_string(end) + "\n";
+  }
+  const fs::path features_bed = temp.path() / "features.bed";
+  tests::write_file(features_bed, features_text);
+  std::string windows_text;
+  for (const Window& window : windows) {
+    windows_text += "chr1\t" + std::to_string(window.x) + "\t" +
+                    std::to_string(window.y) + "\n";
+  }
+  const fs::path windows_bed = temp.path() / "windows.bed";
+  tests::write_file(windows_bed, windows_text);
+
+  std::string output;
+  REQUIRE(tests::run_command_status("bedtools coverage -a " +
+                                        windows_bed.string() + " -b " +
+                                        features_bed.string(),
+                                    &output) == 0);
+  std::vector<std::vector<std::string>> rows;
+  std::size_t start = 0;
+  while (start < output.size()) {
+    const std::size_t end = output.find('\n', start);
+    const std::string line = output.substr(
+        start, end == std::string::npos ? std::string::npos : end - start);
+    start = end == std::string::npos ? output.size() : end + 1;
+    if (!line.empty())
+      rows.push_back(tests::split_tabs(line));
+  }
+  REQUIRE(rows.size() == windows.size());
+
+  covidx::CovIndex index;
+  index.build(bam.string(), options);
+  for (std::size_t i = 0; i < windows.size(); ++i) {
+    REQUIRE(rows[i].size() >= 7);
+    const uint64_t expected = std::stoull(rows[i][3]);
+    CHECK(index.feature_count("pooled", "chr1", windows[i].x, windows[i].y) ==
+          expected);
+  }
 }

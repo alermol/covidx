@@ -132,6 +132,39 @@ TEST_CASE("load rejects manifest and file-level corruption") {
   }
 }
 
+TEST_CASE("feature metadata mismatches are rejected on load") {
+  tests::TempDir temp;
+  const fs::path out = temp.path() / "features";
+  {
+    CovIndex index;
+    index.build(tiny_bam().string());
+    index.save(out.string(), "tiny");
+  }
+  const fs::path index = out / "tiny.covidx";
+  const std::string manifest = tests::read_file(index / "manifest.json");
+
+  {
+    const fs::path copy = copy_index(index, temp.path() / "version");
+    std::string text = manifest;
+    const std::string from = "\"format_version\": \"1.1.0\"";
+    const std::size_t pos = text.find(from);
+    REQUIRE(pos != std::string::npos);
+    text.replace(pos, from.size(), "\"format_version\": \"1.0.0\"");
+    tests::write_file(copy / "manifest.json", text);
+    expect_format_error(copy, OpenOptions{});
+  }
+  {
+    const fs::path copy = copy_index(index, temp.path() / "total");
+    std::string text = manifest;
+    const std::string from = "\"total_features\": 6";
+    const std::size_t pos = text.find(from);
+    REQUIRE(pos != std::string::npos);
+    text.replace(pos, from.size(), "\"total_features\": 7");
+    tests::write_file(copy / "manifest.json", text);
+    expect_format_error(copy, OpenOptions{});
+  }
+}
+
 TEST_CASE("unit-file corruption is caught by the right validation level") {
   tests::TempDir temp;
   const fs::path index = make_index(temp.path());

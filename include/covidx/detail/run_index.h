@@ -26,9 +26,6 @@ public:
   [[nodiscard]] uint64_t runs() const {
     return start_.size();
   }
-  [[nodiscard]] uint32_t w() const {
-    return w_;
-  }
   [[nodiscard]] uint64_t length() const {
     return length_;
   }

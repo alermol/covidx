@@ -18,19 +18,24 @@ using covidx::CovIndex;
 TEST_CASE("concurrent read-only queries return identical answers") {
   tests::TempDir temp;
   {
+    covidx::BuildOptions options;
+    options.layout = covidx::Layout::Both;
+    options.groups = {covidx::Group{"trio", {"S1", "S2"}}};
     CovIndex index;
-    index.build((fs::path(COVIDX_TEST_DATA_DIR) / "tiny.bam").string());
+    index.build((fs::path(COVIDX_TEST_DATA_DIR) / "tiny.bam").string(),
+                options);
     index.save(temp.path().string(), "tiny");
   }
   CovIndex index;
   index.load((temp.path() / "tiny.covidx").string());
 
   std::vector<std::pair<std::string, uint64_t>> expected;
-  for (const char* unit : {"S1", "S2", "S3", "S4"}) {
+  std::vector<uint64_t> expected_features;
+  for (const char* unit : {"S1", "S2", "S3", "S4", "trio", "pooled"}) {
     for (uint64_t x = 0; x < 1000; x += 37) {
-      expected.emplace_back(
-          unit, index.covered_count(unit, "chr1", x,
-                                    std::min<uint64_t>(1000, x + 83)));
+      const uint64_t y = std::min<uint64_t>(1000, x + 83);
+      expected.emplace_back(unit, index.covered_count(unit, "chr1", x, y));
+      expected_features.push_back(index.feature_count(unit, "chr1", x, y));
     }
   }
 
@@ -41,11 +46,14 @@ TEST_CASE("concurrent read-only queries return identical answers") {
       try {
         for (int round = 0; round < 200; ++round) {
           std::size_t i = 0;
-          for (const char* unit : {"S1", "S2", "S3", "S4"}) {
+          for (const char* unit : {"S1", "S2", "S3", "S4", "trio", "pooled"}) {
             for (uint64_t x = 0; x < 1000; x += 37) {
-              const uint64_t got = index.covered_count(
-                  unit, "chr1", x, std::min<uint64_t>(1000, x + 83));
-              if (got != expected[i].second) {
+              const uint64_t y = std::min<uint64_t>(1000, x + 83);
+              const uint64_t got = index.covered_count(unit, "chr1", x, y);
+              const uint64_t got_features =
+                  index.feature_count(unit, "chr1", x, y);
+              if (got != expected[i].second ||
+                  got_features != expected_features[i]) {
                 failed.store(true);
                 return;
               }

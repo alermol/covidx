@@ -1,6 +1,5 @@
 #include "covidx/detail/cigar.h"
 
-#include <algorithm>
 #include <cstdint>
 #include <string>
 
@@ -44,7 +43,7 @@ void flush_block(std::vector<Block>& blocks, bool& active, uint64_t& start,
 
 std::vector<Block> extract_blocks(const bam1_t& read,
                                   const ExtractPolicy& policy,
-                                  uint64_t contig_length) {
+                                  uint64_t contig_length, ReferenceSpan* span) {
   if (read.core.pos < 0) {
     throw InputError("mapped record has a negative position: " +
                      read_context(read));
@@ -71,7 +70,8 @@ std::vector<Block> extract_blocks(const bam1_t& read,
   std::vector<Block> blocks;
   blocks.reserve(read.core.n_cigar);
 
-  uint64_t ref_pos = static_cast<uint64_t>(read.core.pos);
+  const uint64_t span_start = static_cast<uint64_t>(read.core.pos);
+  uint64_t ref_pos = span_start;
   uint64_t query_pos = 0;
   bool active = false;
   uint64_t cs = 0;
@@ -178,6 +178,10 @@ std::vector<Block> extract_blocks(const bam1_t& read,
           std::to_string(contig_length) + ": " + read_context(read));
     }
   }
+  if (span != nullptr) {
+    span->start = span_start;
+    span->end = ref_pos;
+  }
   return blocks;
 }
 
@@ -192,6 +196,22 @@ bool ReadFilter::accept(const bam1_t& read, std::vector<Block>& blocks) const {
     return false;
   blocks = extract_blocks(read, extract, contig_length);
   return !blocks.empty();
+}
+
+bool ReadFilter::accept_alignment(const bam1_t& read,
+                                  std::vector<Block>& blocks,
+                                  ReferenceSpan& span) const {
+  blocks.clear();
+  span = ReferenceSpan{};
+  if ((read.core.flag & BAM_FUNMAP) != 0 || read.core.tid < 0 ||
+      read.core.pos < 0)
+    return false;
+  if ((read.core.flag & effective_exclude) != 0)
+    return false;
+  if (read.core.qual < min_mapq)
+    return false;
+  blocks = extract_blocks(read, extract, contig_length, &span);
+  return true;
 }
 
 } // namespace covidx::detail

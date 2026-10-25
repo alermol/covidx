@@ -1,10 +1,7 @@
 #include "covidx/detail/build.h"
 
-#include <memory>
-#include <utility>
 #include <vector>
 
-#include "covidx/detail/run_sweep.h"
 #include "covidx/detail/scope.h"
 
 namespace covidx::detail {

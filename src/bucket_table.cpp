@@ -1,7 +1,6 @@
 #include "covidx/detail/bucket_table.h"
 
 #include <algorithm>
-#include <limits>
 #include <string>
 
 #include "covidx/error.h"

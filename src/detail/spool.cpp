@@ -7,7 +7,6 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
-#include <limits>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -34,7 +33,20 @@ namespace fs = std::filesystem;
 
 constexpr std::size_t kSpoolBufferBytes = 1u << 16;
 constexpr std::size_t kRecordBytes = 16;
+constexpr std::size_t kFeatureRecordBytes = 8;
 constexpr std::size_t kMaxOpenSpools = 256;
+
+void encode_u32(uint8_t* out, uint32_t value) {
+  for (int i = 0; i < 4; ++i)
+    out[i] = static_cast<uint8_t>(value >> (8 * i));
+}
+
+uint32_t decode_u32(const uint8_t* in) {
+  uint32_t value = 0;
+  for (int i = 0; i < 4; ++i)
+    value |= static_cast<uint32_t>(in[i]) << (8 * i);
+  return value;
+}
 
 void encode_u64(uint8_t* out, uint64_t value) {
   for (int i = 0; i < 8; ++i)
@@ -88,6 +100,137 @@ struct BatchStats {
 }
 
 } // namespace
+
+FeatureSpoolWriter::FeatureSpoolWriter(std::string path)
+    : path_(std::move(path)) {
+  const fs::path parent = fs::path(path_).parent_path();
+  if (!parent.empty()) {
+    std::error_code ec;
+    fs::create_directories(parent, ec);
+    if (ec)
+      throw OutputError("cannot create feature spool directory '" +
+                        parent.string() + "'");
+  }
+  file_ = std::fopen(path_.c_str(), "wb");
+  if (file_ == nullptr) {
+    throw OutputError("cannot create feature spool '" + path_ +
+                      "': " + std::strerror(errno));
+  }
+  buffer_.reserve(kSpoolBufferBytes + kFeatureRecordBytes);
+}
+
+FeatureSpoolWriter::~FeatureSpoolWriter() {
+  try {
+    close();
+  } catch (...) {
+  }
+  if (file_ != nullptr) {
+    std::fclose(file_);
+    file_ = nullptr;
+  }
+}
+
+void FeatureSpoolWriter::write(FeatureSpan span) {
+  if (span.start >= span.end)
+    throw OutputError("feature span is empty or reversed");
+  const std::size_t offset = buffer_.size();
+  buffer_.resize(offset + kFeatureRecordBytes);
+  encode_u32(buffer_.data() + offset, span.start);
+  encode_u32(buffer_.data() + offset + 4, span.end);
+  ++records_;
+  if (buffer_.size() >= kSpoolBufferBytes)
+    flush();
+}
+
+void FeatureSpoolWriter::flush() {
+  if (buffer_.empty())
+    return;
+  const std::size_t written =
+      std::fwrite(buffer_.data(), 1, buffer_.size(), file_);
+  if (written != buffer_.size())
+    throw OutputError("write error on feature spool '" + path_ + "'");
+  buffer_.clear();
+}
+
+void FeatureSpoolWriter::close() {
+  if (file_ == nullptr)
+    return;
+  flush();
+  if (std::fflush(file_) != 0) {
+    std::fclose(file_);
+    file_ = nullptr;
+    throw OutputError("flush error on feature spool '" + path_ + "'");
+  }
+  // Spools are process-local intermediates and are read immediately after
+  // close. They do not need fsync; the published unit files do.
+  if (std::fclose(file_) != 0) {
+    file_ = nullptr;
+    throw OutputError("close error on feature spool '" + path_ + "'");
+  }
+  file_ = nullptr;
+}
+
+FeatureSpoolReader::FeatureSpoolReader(std::string path)
+    : path_(std::move(path)), buffer_(kSpoolBufferBytes) {
+  file_ = std::fopen(path_.c_str(), "rb");
+  if (file_ == nullptr) {
+    if (errno == ENOENT)
+      return;
+    throw IoError("cannot open feature spool '" + path_ +
+                  "': " + std::strerror(errno));
+  }
+}
+
+FeatureSpoolReader::~FeatureSpoolReader() {
+  if (file_ != nullptr)
+    std::fclose(file_);
+}
+
+bool FeatureSpoolReader::fill() {
+  if (file_ == nullptr)
+    return false;
+  position_ = 0;
+  available_ = std::fread(buffer_.data(), 1, buffer_.size(), file_);
+  if (available_ == 0) {
+    if (std::ferror(file_) != 0)
+      throw IoError("read error on feature spool '" + path_ + "'");
+    return false;
+  }
+  return true;
+}
+
+bool FeatureSpoolReader::next(FeatureSpan& span) {
+  if (file_ == nullptr)
+    return false;
+  if (position_ + kFeatureRecordBytes > available_) {
+    if (position_ != available_)
+      throw FormatError("truncated feature spool '" + path_ + "'");
+    if (!fill())
+      return false;
+    if (available_ < kFeatureRecordBytes)
+      throw FormatError("truncated feature spool '" + path_ + "'");
+  }
+  const uint8_t* data = buffer_.data() + position_;
+  position_ += kFeatureRecordBytes;
+  span.start = decode_u32(data);
+  span.end = decode_u32(data + 4);
+  if (span.start >= span.end)
+    throw FormatError("invalid feature span in spool '" + path_ + "'");
+  if (have_previous_ && span.start < previous_start_) {
+    throw FormatError("feature spool '" + path_ + "' is not sorted by start");
+  }
+  previous_start_ = span.start;
+  have_previous_ = true;
+  return true;
+}
+
+std::vector<FeatureSpan> FeatureSpoolReader::read_all() {
+  std::vector<FeatureSpan> spans;
+  FeatureSpan span;
+  while (next(span))
+    spans.push_back(span);
+  return spans;
+}
 
 RunSpoolWriter::RunSpoolWriter(std::string path) : path_(std::move(path)) {
   const fs::path parent = fs::path(path_).parent_path();
@@ -155,11 +298,8 @@ void RunSpoolWriter::close() {
     file_ = nullptr;
     throw OutputError("flush error on spool '" + path_ + "'");
   }
-  if (::fsync(::fileno(file_)) != 0) {
-    std::fclose(file_);
-    file_ = nullptr;
-    throw OutputError("fsync error on spool '" + path_ + "'");
-  }
+  // Spools are process-local intermediates and are read immediately after
+  // close. They do not need fsync; the published unit files do.
   if (std::fclose(file_) != 0) {
     file_ = nullptr;
     throw OutputError("close error on spool '" + path_ + "'");
@@ -167,7 +307,8 @@ void RunSpoolWriter::close() {
   file_ = nullptr;
 }
 
-RunSpoolReader::RunSpoolReader(std::string path) : path_(std::move(path)) {
+RunSpoolReader::RunSpoolReader(std::string path)
+    : path_(std::move(path)), buffer_(kSpoolBufferBytes) {
   file_ = std::fopen(path_.c_str(), "rb");
   if (file_ == nullptr) {
     if (errno == ENOENT)
@@ -181,18 +322,32 @@ RunSpoolReader::~RunSpoolReader() {
     std::fclose(file_);
 }
 
-bool RunSpoolReader::next(Run& run) {
+bool RunSpoolReader::fill() {
   if (file_ == nullptr)
     return false;
-  uint8_t data[kRecordBytes];
-  const std::size_t got = std::fread(data, 1, kRecordBytes, file_);
-  if (got == 0) {
+  position_ = 0;
+  available_ = std::fread(buffer_.data(), 1, buffer_.size(), file_);
+  if (available_ == 0) {
     if (std::ferror(file_) != 0)
       throw IoError("read error on spool '" + path_ + "'");
     return false;
   }
-  if (got != kRecordBytes)
-    throw FormatError("truncated spool '" + path_ + "'");
+  return true;
+}
+
+bool RunSpoolReader::next(Run& run) {
+  if (file_ == nullptr)
+    return false;
+  if (position_ + kRecordBytes > available_) {
+    if (position_ != available_)
+      throw FormatError("truncated spool '" + path_ + "'");
+    if (!fill())
+      return false;
+    if (available_ < kRecordBytes)
+      throw FormatError("truncated spool '" + path_ + "'");
+  }
+  const uint8_t* data = buffer_.data() + position_;
+  position_ += kRecordBytes;
   run.start = decode_u64(data);
   run.end = decode_u64(data + 8);
   if (run.start >= run.end)
@@ -341,6 +496,24 @@ fs::path BuildWorkspace::unit_spool(uint32_t unit_id,
   return spool_dir() / unit / (std::string(contig) + ".bin");
 }
 
+fs::path BuildWorkspace::sample_feature_spool(uint32_t sample_id,
+                                              uint32_t contig_id) const {
+  char sample[32];
+  char contig[32];
+  std::snprintf(sample, sizeof(sample), "s%06u", sample_id);
+  std::snprintf(contig, sizeof(contig), "c%06u", contig_id);
+  return spool_dir() / "features" / sample / (std::string(contig) + ".bin");
+}
+
+fs::path BuildWorkspace::unit_feature_spool(uint32_t unit_id,
+                                            uint32_t contig_id) const {
+  char unit[32];
+  char contig[32];
+  std::snprintf(unit, sizeof(unit), "u%06u", unit_id);
+  std::snprintf(contig, sizeof(contig), "c%06u", contig_id);
+  return spool_dir() / "features" / unit / (std::string(contig) + ".bin");
+}
+
 void BuildWorkspace::remove_spools() {
   std::error_code ec;
   fs::remove_all(spool_dir(), ec);
@@ -352,6 +525,14 @@ fs::path spool_path_for_unit(const BuildWorkspace& workspace,
     return workspace.sample_spool(unit.sample_ids.front(), contig_id);
   }
   return workspace.unit_spool(unit.id, contig_id);
+}
+
+fs::path feature_spool_path_for_unit(const BuildWorkspace& workspace,
+                                     const UnitPlan& unit, uint32_t contig_id) {
+  if (unit.kind == UnitInfo::Kind::Sample && !unit.sample_ids.empty()) {
+    return workspace.sample_feature_spool(unit.sample_ids.front(), contig_id);
+  }
+  return workspace.unit_feature_spool(unit.id, contig_id);
 }
 
 namespace {
@@ -385,11 +566,14 @@ build_contig_spools(const BamHeaderInfo& header, const BuildOptions& options,
       throw UsageError("pooled layout must have exactly one unit");
     RunSpoolWriter writer(
         workspace.unit_spool(units[0].id, contig_id).string());
+    FeatureSpoolWriter feature_writer(
+        workspace.unit_feature_spool(units[0].id, contig_id).string());
     RunSweep sweep([&writer](Run run) { writer.write(run); });
     BamRegionReader reader(header.path, static_cast<int32_t>(bam_tid),
                            intervals);
     std::unique_ptr<bam1_t, BamDeleter> record(bam_init1());
     std::vector<Block> blocks;
+    ReferenceSpan span;
     while (reader.next(*record)) {
       ++stats.records_examined;
       if (!passes_pre_filter(*record, filter)) {
@@ -403,9 +587,11 @@ build_contig_spools(const BamHeaderInfo& header, const BuildOptions& options,
         }
         continue;
       }
-      if (!filter.accept(*record, blocks)) {
-        ++stats.records_no_blocks;
+      if (!filter.accept_alignment(*record, blocks, span))
         continue;
+      if (span.start < span.end) {
+        feature_writer.write(FeatureSpan{static_cast<uint32_t>(span.start),
+                                         static_cast<uint32_t>(span.end)});
       }
       const std::vector<Block> clipped = clip_blocks(blocks, intervals);
       if (clipped.empty()) {
@@ -419,6 +605,7 @@ build_contig_spools(const BamHeaderInfo& header, const BuildOptions& options,
     }
     sweep.finish();
     writer.close();
+    feature_writer.close();
     return stats;
   }
 
@@ -440,20 +627,27 @@ build_contig_spools(const BamHeaderInfo& header, const BuildOptions& options,
         sample_count == 0 ? 0 : std::min(sample_count, begin + batch_size);
     std::vector<std::unique_ptr<RunSpoolWriter>> writers;
     std::vector<std::unique_ptr<RunSweep>> sweeps;
+    std::vector<std::unique_ptr<FeatureSpoolWriter>> feature_writers;
     writers.reserve(end - begin);
     sweeps.reserve(end - begin);
+    feature_writers.reserve(end - begin);
     for (std::size_t sample = begin; sample < end; ++sample) {
       writers.push_back(std::make_unique<RunSpoolWriter>(
           workspace.sample_spool(static_cast<uint32_t>(sample), contig_id)
               .string()));
       sweeps.push_back(std::make_unique<RunSweep>(
           [writer = writers.back().get()](Run run) { writer->write(run); }));
+      feature_writers.push_back(std::make_unique<FeatureSpoolWriter>(
+          workspace
+              .sample_feature_spool(static_cast<uint32_t>(sample), contig_id)
+              .string()));
     }
 
     BamRegionReader reader(header.path, static_cast<int32_t>(bam_tid),
                            intervals);
     std::unique_ptr<bam1_t, BamDeleter> record(bam_init1());
     std::vector<Block> blocks;
+    ReferenceSpan span;
     while (reader.next(*record)) {
       if (batch == 0) {
         ++stats.records_examined;
@@ -473,20 +667,23 @@ build_contig_spools(const BamHeaderInfo& header, const BuildOptions& options,
           continue;
       }
 
-      if (!filter.accept(*record, blocks)) {
-        if (batch == 0)
-          ++stats.records_no_blocks;
+      if (!filter.accept_alignment(*record, blocks, span))
         continue;
-      }
       const uint32_t sample =
           sample_id_for_read(*record, header, options.unknown_sample);
+      const std::vector<Block> clipped = clip_blocks(blocks, intervals);
+      if (batch == 0 && clipped.empty())
+        ++stats.records_no_blocks;
       if (sample < begin || sample >= end)
         continue;
-      const std::vector<Block> clipped = clip_blocks(blocks, intervals);
-      if (clipped.empty()) {
-        ++stats.records_no_blocks;
-        continue;
+      if (span.start < span.end) {
+        const std::size_t local = sample - begin;
+        feature_writers[local]->write(
+            FeatureSpan{static_cast<uint32_t>(span.start),
+                        static_cast<uint32_t>(span.end)});
       }
+      if (clipped.empty())
+        continue;
       ++stats.records_accepted;
       const std::size_t local = sample - begin;
       sweeps[local]->advance(static_cast<uint64_t>(record->core.pos));
@@ -496,6 +693,8 @@ build_contig_spools(const BamHeaderInfo& header, const BuildOptions& options,
     for (auto& sweep : sweeps)
       sweep->finish();
     for (auto& writer : writers)
+      writer->close();
+    for (auto& writer : feature_writers)
       writer->close();
   }
 

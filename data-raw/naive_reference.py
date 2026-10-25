@@ -3,6 +3,7 @@
 
 Uses `samtools view` and plain Python; no pysam. This is the reference for
 --ambiguous-read-bases exclude, where samtools depth is not a valid comparator.
+It also validates column 4 against the full CIGAR reference spans.
 
 Without --region or --windows-bed, the script scans a whole contig and is
 intended for small contigs. Use --region for a bounded read-rich region on a
@@ -167,6 +168,7 @@ def naive_covered(bam, contig, regions, sparse, args):
         command = ["samtools", "view", bam, contig]
     records = run(command).stdout.splitlines()
     covered = set()
+    features = []
     for record in records:
         fields = record.split("\t")
         flag = int(fields[1])
@@ -186,6 +188,7 @@ def naive_covered(bam, contig, regions, sparse, args):
             )
         ref = pos
         query = 0
+        span = 0
         for count_text, op in CIGAR_RE.findall(cigar):
             count = int(count_text)
             if count == 0:
@@ -199,13 +202,16 @@ def naive_covered(bam, contig, regions, sparse, args):
                         covered.add(ref + k)
                 ref += count
                 query += count
+                span += count
             elif op == "D":
                 if not args.no_count_deletions:
                     for k in range(count):
                         covered.add(ref + k)
                 ref += count
+                span += count
             elif op == "N":
                 ref += count
+                span += count
             elif op in ("I", "S"):
                 query += count
             elif op in ("H", "P"):
@@ -214,7 +220,9 @@ def naive_covered(bam, contig, regions, sparse, args):
                 raise SystemExit("unsupported CIGAR B")
             else:
                 raise SystemExit(f"unsupported CIGAR operation {op}")
-    return sorted(covered)
+        if span > 0:
+            features.append((pos, pos + span))
+    return sorted(covered), features
 
 
 def covered_total(covered, windows):
@@ -299,7 +307,9 @@ def main():
         regions = Path(tmp) / "regions.bed"
         write_regions(regions, args.contig, intervals)
         bam = prepare_bam(args.bam, read_group, regions, tmp)
-        covered = naive_covered(bam, args.contig, regions, sparse, args)
+        covered, features = naive_covered(
+            bam, args.contig, regions, sparse, args
+        )
         bed = Path(tmp) / "windows.bed"
         bed.write_text(
             "".join(f"{args.contig}\t{x}\t{y}\n" for x, y in windows)
@@ -330,7 +340,17 @@ def main():
     if len(rows) != len(windows):
         raise SystemExit("row count mismatch")
     for line, (x, y) in zip(rows, windows):
-        got = int(line.split("\t")[4])
+        fields = line.split("\t")
+        got_features = int(fields[4])
+        got = int(fields[5])
+        want_features = sum(
+            1 for start, end in features if start < y and end > x
+        )
+        if got_features != want_features:
+            raise SystemExit(
+                f"feature mismatch at {args.contig}:{x}-{y}: "
+                f"covidx={got_features} naive={want_features}"
+            )
         want = bisect.bisect_left(covered, y)
         want -= bisect.bisect_left(covered, x)
         if got != want:
@@ -339,7 +359,7 @@ def main():
             )
     print(
         f"ok: {len(windows)} windows on {args.contig} "
-        f"({len(covered)} covered positions)"
+        f"({len(covered)} covered positions, {len(features)} feature spans)"
     )
 
 

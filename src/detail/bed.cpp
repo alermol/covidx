@@ -3,7 +3,6 @@
 #include <charconv>
 #include <fstream>
 #include <iostream>
-#include <string_view>
 
 #include "covidx/error.h"
 

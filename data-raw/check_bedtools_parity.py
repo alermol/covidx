@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare covidx covered counts with default bedtools coverage column 5.
+"""Compare covidx coverage and feature counts with bedtools coverage.
 
 Blocks are generated from samtools depth positive positions, so the covered
 set is independent of covidx. See docs/parity.md for the normative procedure.
@@ -7,8 +7,8 @@ set is independent of covidx. See docs/parity.md for the normative procedure.
 Without --region or --windows-bed, the script enumerates short windows across
 a whole contig and is intended for small contigs. Use --region for a bounded
 read-rich region on a large contig. The region syntax is 1-based inclusive,
-matching covidx-query --region. Column 4 is not validated here: it requires
-alignment spans, not covered blocks.
+matching covidx-query --region. Column 4 is validated against bedtools using
+full CIGAR reference spans.
 """
 import argparse
 import bisect
@@ -20,6 +20,7 @@ import tempfile
 from pathlib import Path
 
 REGION_RE = re.compile(r"^(.+):(\d+)-(\d+)$")
+CIGAR_RE = re.compile(r"(\d+)([MIDNSHP=XB])")
 MAX_WINDOWS = 2_000_000
 
 
@@ -211,6 +212,50 @@ def covered_total(positive, windows):
     return total
 
 
+def alignment_features(bam, contig, regions, args):
+    """Return full CIGAR reference spans for accepted alignments."""
+    effective = (args.exclude_flags | 0x800) & ~(
+        0x800 if args.include_supplementary else 0
+    )
+    mask = effective | 0x4
+    command = [
+        "samtools",
+        "view",
+        "-F",
+        str(mask),
+        "-q",
+        str(args.min_mapq),
+        "-L",
+        str(regions),
+        bam,
+    ]
+    features = []
+    for line in run(command).stdout.splitlines():
+        fields = line.split("\t")
+        flag = int(fields[1])
+        if flag & 0x4 or flag & effective:
+            continue
+        if int(fields[4]) < args.min_mapq:
+            continue
+        if fields[5] == "*":
+            raise SystemExit(f"mapped read {fields[0]} has CIGAR *")
+        span = 0
+        for count, op in CIGAR_RE.findall(fields[5]):
+            if op in "MDN=X":
+                span += int(count)
+        if span == 0:
+            continue
+        start = int(fields[3]) - 1
+        features.append((start, start + span))
+    return features
+
+
+def write_features(path, contig, features):
+    path.write_text(
+        "".join(f"{contig}\t{start}\t{end}\n" for start, end in features)
+    )
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--bam", required=True)
@@ -300,6 +345,19 @@ def main():
         coverage_output = run(
             ["bedtools", "coverage", "-a", str(windows_bed), "-b", str(blocks)]
         ).stdout
+        features = alignment_features(bam, args.contig, regions, args)
+        features_bed = Path(tmp) / "features.bed"
+        write_features(features_bed, args.contig, features)
+        feature_output = run(
+            [
+                "bedtools",
+                "coverage",
+                "-a",
+                str(windows_bed),
+                "-b",
+                str(features_bed),
+            ]
+        ).stdout
         query = [
             args.covidx_query,
             "--index",
@@ -324,14 +382,25 @@ def main():
         if line and not line.startswith("#")
     ]
     bedtools_rows = [line for line in coverage_output.splitlines() if line]
+    feature_rows = [line for line in feature_output.splitlines() if line]
     if len(covidx_rows) != len(bedtools_rows) or len(covidx_rows) != len(
         windows
     ):
         raise SystemExit("row count mismatch")
-    for covidx_line, bedtools_line, (x, y) in zip(
-        covidx_rows, bedtools_rows, windows
+    if len(feature_rows) != len(windows):
+        raise SystemExit("feature row count mismatch")
+    for index, (covidx_line, bedtools_line, (x, y)) in enumerate(
+        zip(covidx_rows, bedtools_rows, windows)
     ):
-        got = int(covidx_line.split("\t")[4])
+        fields = covidx_line.split("\t")
+        got_features = int(fields[4])
+        got = int(fields[5])
+        want_features = int(feature_rows[index].split("\t")[3])
+        if got_features != want_features:
+            raise SystemExit(
+                f"feature mismatch at {args.contig}:{x}-{y}: "
+                f"covidx={got_features} bedtools={want_features}"
+            )
         want = int(bedtools_line.split("\t")[4])
         if got != want:
             raise SystemExit(
@@ -340,7 +409,7 @@ def main():
             )
     print(
         f"ok: {len(windows)} windows on {args.contig} "
-        f"({len(positive)} positive positions)"
+        f"({len(positive)} positive positions, {len(features)} feature spans)"
     )
 
 

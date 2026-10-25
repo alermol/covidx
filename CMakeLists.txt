@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(covidx VERSION 0.1.1 LANGUAGES CXX)
+project(covidx VERSION 0.2.0 LANGUAGES CXX)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -170,6 +170,7 @@ if(COVIDX_BUILD_TESTS)
     tests/test_manifest.cpp
     tests/test_unit_file.cpp
     tests/test_query.cpp
+    tests/test_feature_counts.cpp
     tests/test_atomic_save.cpp
     tests/test_corruption.cpp
     tests/test_concurrency.cpp

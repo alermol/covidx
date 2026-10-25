@@ -93,6 +93,76 @@ TEST_CASE("spool round-trip and validation") {
   }
   RunSpoolReader bad_order(unsorted.string());
   CHECK_THROWS_AS((void)bad_order.read_all(), covidx::FormatError);
+
+  const fs::path partial = temp.path() / "partial.bin";
+  {
+    RunSpoolWriter writer(partial.string());
+    for (uint64_t i = 0; i < 4096; ++i)
+      writer.write(Run{i * 10, i * 10 + 5});
+    writer.close();
+  }
+  {
+    std::ofstream out(partial, std::ios::binary | std::ios::app);
+    out << std::string(8, '\0');
+  }
+  RunSpoolReader bad_partial(partial.string());
+  CHECK_THROWS_AS((void)bad_partial.read_all(), covidx::FormatError);
+}
+
+TEST_CASE("feature spool round-trip and validation") {
+  tests::TempDir temp;
+  const fs::path path = temp.path() / "features.bin";
+  {
+    covidx::detail::FeatureSpoolWriter writer(path.string());
+    writer.write(covidx::detail::FeatureSpan{0, 5});
+    writer.write(covidx::detail::FeatureSpan{3, 10});
+    writer.write(covidx::detail::FeatureSpan{20, 30});
+    writer.close();
+    CHECK(writer.records() == 3);
+  }
+  const std::vector<covidx::detail::FeatureSpan> spans =
+      covidx::detail::FeatureSpoolReader(path.string()).read_all();
+  REQUIRE(spans.size() == 3);
+  CHECK(spans[1].start == 3);
+  CHECK(spans[1].end == 10);
+  CHECK(fs::file_size(path) == 24);
+
+  covidx::detail::FeatureSpoolReader missing(
+      (temp.path() / "missing.bin").string());
+  CHECK(missing.read_all().empty());
+
+  const fs::path truncated = temp.path() / "truncated.bin";
+  tests::write_file(truncated, std::string(4, '\0'));
+  CHECK_THROWS_AS(
+      (void)covidx::detail::FeatureSpoolReader(truncated.string()).read_all(),
+      covidx::FormatError);
+
+  const fs::path unsorted = temp.path() / "unsorted.bin";
+  {
+    covidx::detail::FeatureSpoolWriter writer(unsorted.string());
+    writer.write(covidx::detail::FeatureSpan{10, 20});
+    writer.write(covidx::detail::FeatureSpan{5, 8});
+    writer.close();
+  }
+  CHECK_THROWS_AS(
+      (void)covidx::detail::FeatureSpoolReader(unsorted.string()).read_all(),
+      covidx::FormatError);
+
+  const fs::path partial = temp.path() / "feature_partial.bin";
+  {
+    covidx::detail::FeatureSpoolWriter writer(partial.string());
+    for (uint64_t i = 0; i < 8192; ++i)
+      writer.write(covidx::detail::FeatureSpan{
+          static_cast<uint32_t>(i * 10), static_cast<uint32_t>(i * 10 + 5)});
+    writer.close();
+  }
+  {
+    std::ofstream out(partial, std::ios::binary | std::ios::app);
+    out << std::string(4, '\0');
+  }
+  CHECK_THROWS_AS(
+      (void)covidx::detail::FeatureSpoolReader(partial.string()).read_all(),
+      covidx::FormatError);
 }
 
 TEST_CASE("merge_run_spools is an exact union") {

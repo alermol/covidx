@@ -45,9 +45,10 @@ TEST_CASE("covidx-build help and version") {
   CHECK(run_build("--help", &output) == 0);
   CHECK(output.find("--bam") != std::string::npos);
   CHECK(output.find("--regions") != std::string::npos);
+  CHECK(output.find("--feature-counts") == std::string::npos);
   output.clear();
   CHECK(run_build("--version", &output) == 0);
-  CHECK(output == "covidx-build 0.1.1 (format 1.0.0)\n");
+  CHECK(output == "covidx-build 0.2.0 (format 1.1.0)\n");
 }
 
 TEST_CASE("covidx-build usage errors exit 1") {
@@ -75,6 +76,31 @@ TEST_CASE("covidx-build default build and metadata") {
   CHECK(index.units().size() == 4);
   CHECK(index.covered_count("S1", "chr1", 0, 1000) == 60);
   CHECK(index.manifest().source.records_examined == tests::tiny_reads().size());
+}
+
+TEST_CASE("covidx-build always stores feature counts") {
+  tests::TempDir temp;
+  const fs::path out = temp.path() / "features";
+  CHECK(run_build("--bam " + quoted(tiny_bam()) + " --out " + quoted(out) +
+                  " --layout both --group trio=S1,S2") == 0);
+  const fs::path feature_index = out / "tiny.covidx";
+  const covidx::Manifest manifest =
+      covidx::Manifest::load((feature_index / "manifest.json").string());
+  CHECK(manifest.format_version == "1.1.0");
+  REQUIRE(manifest.units.size() == 6);
+  CHECK(manifest.units[0].total_features == 6);
+  CHECK(manifest.units[4].name == "trio");
+  CHECK(manifest.units[4].total_features == 10);
+  CHECK(manifest.units[5].name == "pooled");
+  CHECK(manifest.units[5].total_features == 12);
+
+  CovIndex index;
+  index.load(feature_index.string());
+  CHECK(index.feature_count("S2", "chr1", 200, 212) == 1);
+
+  CHECK(run_build("--bam " + quoted(tiny_bam()) + " --out " +
+                  quoted(temp.path() / "rejected") + " --feature-counts") ==
+        1);
 }
 
 TEST_CASE("covidx-build layouts, groups, and groups-file") {

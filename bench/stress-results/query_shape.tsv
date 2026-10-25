@@ -1,5 +1,5 @@
 index	ns_per_row	query_rss_mb	query_s	rows	stage	variant
-multi-sample both	13135.8	72.9	0.0235	1789	query_shape	bed_1k
-multi-sample both	5199.7	93.9	0.0561	10789	query_shape	bed_10k
-multi-sample both	3679.0	113.8	0.3708	100789	query_shape	bed_100k
-multi-sample both	3322.8	186.8	1.664	500789	query_shape	bed_500k
+multi-sample both	18893.2	121.3	0.0338	1789	query_shape	bed_1k
+multi-sample both	8147.2	155.2	0.0879	10789	query_shape	bed_10k
+multi-sample both	4637.4	176.1	0.4674	100789	query_shape	bed_100k
+multi-sample both	3790.0	259.3	1.898	500789	query_shape	bed_500k

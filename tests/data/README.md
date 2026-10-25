@@ -15,6 +15,6 @@ Contents:
 - `chr2` length 500 with no reads.
 - Five read groups over four samples (`S1`, `S2`, `S3`, `S4`); `S2` has two read groups and `S3` has none.
 
-`tiny_scope.bed` contains overlapping and touching `--regions` intervals. `golden_index.sha256` lists the SHA-256 hashes of the committed golden index built with `SOURCE_DATE_EPOCH=0` and one thread.
+`tiny_scope.bed` contains overlapping and touching `--regions` intervals. `golden_index.sha256` lists the SHA-256 hashes of the committed golden index built with `SOURCE_DATE_EPOCH=0` and one thread. The golden index uses format `1.1.0` and includes feature-count segments.
 
 Do not edit the BAM or BAI by hand. Regenerate both together.

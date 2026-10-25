@@ -147,6 +147,33 @@ TEST_CASE("SEQ=* is accepted under cover and rejected under exclude") {
       covidx::InputError);
 }
 
+TEST_CASE("reference spans cover M, D, N, =, and X") {
+  BamPtr read = make_read(10, {{'M', 5}, {'D', 2}, {'N', 3}, {'M', 5}},
+                          tests::repeat_sequence(10));
+  covidx::detail::ReferenceSpan span;
+  const std::vector<Block> blocks =
+      covidx::detail::extract_blocks(*read, ExtractPolicy{}, 1000, &span);
+  REQUIRE(blocks.size() == 2);
+  CHECK(span.start == 10);
+  CHECK(span.end == 25);
+}
+
+TEST_CASE("accept_alignment keeps spans when coverage blocks are empty") {
+  covidx::detail::ReadFilter filter;
+  filter.contig_length = 1000;
+  filter.effective_exclude = 0x0F04;
+  filter.extract.count_deletions = false;
+  std::vector<Block> blocks;
+  covidx::detail::ReferenceSpan span;
+
+  BamPtr deletion = make_read(10, {{'D', 10}}, "", 0, 60);
+  CHECK(filter.accept_alignment(*deletion, blocks, span));
+  CHECK(blocks.empty());
+  CHECK(span.start == 10);
+  CHECK(span.end == 20);
+  CHECK_FALSE(filter.accept(*deletion, blocks));
+}
+
 TEST_CASE("ReadFilter applies flags, MAPQ, and extraction") {
   covidx::detail::ReadFilter filter;
   filter.contig_length = 1000;

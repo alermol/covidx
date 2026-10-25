@@ -45,6 +45,7 @@ struct Row {
   uint64_t start = 0;
   uint64_t end = 0;
   std::string unit;
+  uint64_t features = 0;
   uint64_t covered = 0;
   uint64_t uncovered = 0;
   std::string fraction;
@@ -67,10 +68,11 @@ std::vector<Row> parse_rows(const std::string& text) {
         break;
       start = tab + 1;
     }
-    REQUIRE(fields.size() == 7);
-    rows.push_back(Row{
-        fields[0], std::stoull(fields[1]), std::stoull(fields[2]), fields[3],
-        std::stoull(fields[4]), std::stoull(fields[5]), fields[6]});
+    REQUIRE(fields.size() == 8);
+    rows.push_back(Row{fields[0], std::stoull(fields[1]),
+                       std::stoull(fields[2]), fields[3],
+                       std::stoull(fields[4]), std::stoull(fields[5]),
+                       std::stoull(fields[6]), fields[7]});
   }
   return rows;
 }
@@ -224,6 +226,7 @@ TEST_CASE("CLI scoped build matches a full build inside the scope") {
   const auto scoped_rows = parse_rows(scoped_output);
   REQUIRE(full_rows.size() == scoped_rows.size());
   for (std::size_t i = 0; i < full_rows.size(); ++i) {
+    CHECK(full_rows[i].features == scoped_rows[i].features);
     CHECK(full_rows[i].covered == scoped_rows[i].covered);
   }
   const fs::path outside = temp.path() / "outside.bed";
@@ -244,13 +247,13 @@ TEST_CASE("README quickstart commands work") {
   CHECK(
       run_query("--index " + quoted(index) + " --unit S1 --region chr1:1-1000",
                 &output) == 0);
-  CHECK(output.find("chr1\t0\t1000\tS1\t60\t940\t0.060000") !=
+  CHECK(output.find("chr1\t0\t1000\tS1\t6\t60\t940\t0.060000") !=
         std::string::npos);
 
   output.clear();
   CHECK(run_query("--index " + quoted(index) + " --unit S1 --window 500",
                   &output) == 0);
-  CHECK(output.find("chr1\t0\t500\tS1\t20\t480\t0.040000") !=
+  CHECK(output.find("chr1\t0\t500\tS1\t2\t20\t480\t0.040000") !=
         std::string::npos);
 
   const fs::path contigs_out = temp.path() / "contigs";

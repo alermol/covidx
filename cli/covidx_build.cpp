@@ -1,6 +1,5 @@
 #include <cstdio>
 #include <filesystem>
-#include <iostream>
 #include <string>
 #include <vector>
 
@@ -258,11 +257,12 @@ int run(int argc, char** argv) {
     const covidx::BuildStats& stats = index.build_stats();
     std::fprintf(
         stderr,
-        "covidx-build: info: contigs=%llu units=%llu runs=%llu accepted=%llu "
-        "elapsed=%.3fs out=%s\n",
+        "covidx-build: info: contigs=%llu units=%llu runs=%llu features=%llu "
+        "accepted=%llu elapsed=%.3fs out=%s\n",
         static_cast<unsigned long long>(stats.contigs),
         static_cast<unsigned long long>(stats.units),
         static_cast<unsigned long long>(stats.runs),
+        static_cast<unsigned long long>(stats.features),
         static_cast<unsigned long long>(stats.records_accepted),
         elapsed.count(), (fs::path(out) / (name + ".covidx")).c_str());
   }
