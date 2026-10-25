@@ -1,0 +1,3 @@
+index	index_mb	load_rss_mb	load_s	ns_per_row	query_s	rows	runs	stage
+cs pooled	15.61	17.5	0.0101	5251.3	0.0304	5789	875555	query_density
+multi both	127.3	59.6	0.0156	7928.8	0.0459	5789	7075359	query_density

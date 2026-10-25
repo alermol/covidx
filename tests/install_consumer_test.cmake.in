@@ -1,0 +1,34 @@
+set(PREFIX "@CMAKE_CURRENT_BINARY_DIR@/install-prefix")
+set(CONSUMER_BUILD "@CMAKE_CURRENT_BINARY_DIR@/consumer-build")
+file(REMOVE_RECURSE "${PREFIX}" "${CONSUMER_BUILD}")
+
+execute_process(
+  COMMAND "@CMAKE_COMMAND@" --install "@CMAKE_BINARY_DIR@" --prefix "${PREFIX}"
+  RESULT_VARIABLE install_result)
+if(NOT install_result EQUAL 0)
+  message(FATAL_ERROR "install failed")
+endif()
+
+execute_process(
+  COMMAND "@CMAKE_COMMAND@" -S "@CMAKE_CURRENT_SOURCE_DIR@/tests/consumer"
+          -B "${CONSUMER_BUILD}" "-DCMAKE_PREFIX_PATH=${PREFIX}"
+  RESULT_VARIABLE configure_result
+  OUTPUT_VARIABLE configure_output
+  ERROR_VARIABLE configure_output)
+if(NOT configure_result EQUAL 0)
+  message(FATAL_ERROR "consumer configure failed:\n${configure_output}")
+endif()
+
+execute_process(
+  COMMAND "@CMAKE_COMMAND@" --build "${CONSUMER_BUILD}" -j 4
+  RESULT_VARIABLE build_result)
+if(NOT build_result EQUAL 0)
+  message(FATAL_ERROR "consumer build failed")
+endif()
+
+execute_process(
+  COMMAND "${CONSUMER_BUILD}/covidx_consumer"
+  RESULT_VARIABLE run_result)
+if(NOT run_result EQUAL 0)
+  message(FATAL_ERROR "consumer run failed")
+endif()

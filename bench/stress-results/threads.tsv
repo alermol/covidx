@@ -1,0 +1,7 @@
+accepted	bam	bam_mb	build_rss_mb	build_s	index_mb	query_rows	query_s	runs	stage	threads	units
+20456242	multi-sample.bam	847.4	78.3	37.7689	127.3	5789	0.0372	7075359	threads	1	6
+20456242	multi-sample.bam	847.4	108.2	19.5312	127.3	5789	0.0365	7075359	threads	2	6
+20456242	multi-sample.bam	847.4	194.7	11.1478	127.3	5789	0.0386	7075359	threads	4	6
+20456242	multi-sample.bam	847.4	367.9	6.5655	127.3	5789	0.0375	7075359	threads	8	6
+20456242	multi-sample.bam	847.4	714.0	4.7164	127.3	5789	0.0379	7075359	threads	16	6
+20456242	multi-sample.bam	847.4	1312.6	3.9133	127.3	5789	0.0458	7075359	threads	30	6

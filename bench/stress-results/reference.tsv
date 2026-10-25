@@ -1,0 +1,14 @@
+bam_mb	build_s	case	detail	exit	ok	runs	stage
+0.73	0.0246	ref_m	ok: 253 windows on chr1	0	True	701	reference
+0.74	0.0257	ref_deletions	ok: 253 windows on chr1	0	True	547	reference
+0.73	0.0293	ref_skips	ok: 253 windows on chr1	0	True	1456	reference
+0.75	0.0281	ref_indels	ok: 253 windows on chr1	0	True	645	reference
+0.73	0.0265	ref_softclip	ok: 253 windows on chr1	0	True	1610	reference
+0.73	0.0274	ref_hardclip	ok: 253 windows on chr1	0	True	701	reference
+0.73	0.0264	ref_eqx	ok: 253 windows on chr1	0	True	701	reference
+0.85	0.0313	ref_mixed	ok: 253 windows on chr1	0	True	791	reference
+0.74	0.0297	ref_del_gap	ok: 253 windows on chr1	0	True	2008	reference
+0.79	0.0264	ref_n_cover	ok: 253 windows on chr1	0	True	687	reference
+0.79	0.0437	ref_n_exclude	ok: 253 windows on chr1	0	True	8511	reference
+0.89	0.0363	ref_flags_mapq	ok: 253 windows on chr1	0	True	2581	reference
+0.86	0.0335	ref_include_supp	ok: 253 windows on chr1	0	True	1408	reference

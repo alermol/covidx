@@ -1,0 +1,30 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+find_dependency(ZLIB)
+
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+  pkg_check_modules(HTSLIB QUIET IMPORTED_TARGET htslib>=1.16)
+endif()
+# Keep one target name in the exported interface regardless of how htslib
+# was discovered, so consumers do not depend on the build-time method.
+if(NOT TARGET HTSLIB::HTSLIB)
+  if(TARGET PkgConfig::HTSLIB)
+    add_library(HTSLIB::HTSLIB INTERFACE IMPORTED)
+    set_target_properties(HTSLIB::HTSLIB PROPERTIES
+      INTERFACE_LINK_LIBRARIES PkgConfig::HTSLIB)
+  else()
+    find_path(HTSLIB_INCLUDE_DIR htslib/sam.h REQUIRED)
+    find_library(HTSLIB_LIBRARY hts REQUIRED)
+    add_library(HTSLIB::HTSLIB UNKNOWN IMPORTED)
+    set_target_properties(HTSLIB::HTSLIB PROPERTIES
+      IMPORTED_LOCATION "${HTSLIB_LIBRARY}"
+      INTERFACE_INCLUDE_DIRECTORIES "${HTSLIB_INCLUDE_DIR}")
+  endif()
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/covidxTargets.cmake")
+
+check_required_components(covidx)

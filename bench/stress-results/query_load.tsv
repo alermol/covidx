@@ -1,0 +1,6 @@
+index	index_mb	load_rss_mb	load_s	ns_per_row	query_rss_mb	query_s	rows	stage	variant
+multi-sample both	127.3	59.9	0.2104	40421.5	90.7	0.234	5789	query_load	mmap_crc_structural
+multi-sample both	127.3	59.6	0.0205	6978.8	90.4	0.0404	5789	query_load	mmap_nocrc_structural
+multi-sample both	127.3	190.2	0.6155	105683.2	189.8	0.6118	5789	query_load	heap_nocrc_structural
+multi-sample both	127.3	12.5	0.0093	5735.0	45.4	0.0332	5789	query_load	mmap_nocrc_none
+multi-sample both	127.3	132.4	0.2514	46415.6	133.2	0.2687	5789	query_load	mmap_nocrc_full

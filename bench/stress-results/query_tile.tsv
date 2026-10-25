@@ -1,0 +1,5 @@
+index	ns_per_row	query_rss_mb	query_s	rows	stage	variant	window
+multi-sample both	1785.3	164.6	1.078	603819	query_tile	1kb_one_contig	1000
+multi-sample both	3013.9	94.0	0.0646	21434	query_tile	1mb_all	1000000
+multi-sample both	14267.6	93.2	0.0338	2369	query_tile	10mb_all	10000000
+multi-sample both	42424.2	84.4	0.0196	462	query_tile	100mb_all	100000000

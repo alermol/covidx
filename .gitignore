@@ -66,3 +66,18 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Generated knowledge-graph output
+graphify-out/
+
+# Sanitizer death-test artifacts
+slow-unit-*
+
+# Large local test BAMs and their generated indexes
+data-raw/*.bam
+data-raw/*.bai
+data-raw/*.csi

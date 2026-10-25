@@ -1,0 +1,11 @@
+stage	case	identical	files	t1_s	t8_s
+threads	threads t1 vs t2	True	19	-	-
+threads	threads t1 vs t4	True	19	-	-
+threads	threads t1 vs t8	True	19	-	-
+threads	threads t1 vs t16	True	19	-	-
+threads	threads t1 vs t30	True	19	-	-
+synthetic	base_800k	True	9	1.151	0.313
+synthetic	length_max_2gb	True	9	0.1378	0.142
+synthetic	cigar_mixed	True	9	1.7484	0.4637
+synthetic	samples_8	True	25	1.4064	0.4219
+synthetic	clustered_90	True	9	1.1697	0.3201
