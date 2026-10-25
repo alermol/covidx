@@ -13,7 +13,7 @@ namespace covidx {
 // Version of the on-disk format implemented by this library.
 inline constexpr const char* kFormatVersion = "1.0.0";
 // Version of the builder implementation (independent of the format version).
-inline constexpr const char* kBuilderVersion = "0.1.0";
+inline constexpr const char* kBuilderVersion = "0.1.1";
 
 // Unit file magic, exactly eight bytes with no terminator.
 inline constexpr char kUnitMagic[8] = {'C', 'O', 'V', 'I', 'D', 'X', 'U', '1'};

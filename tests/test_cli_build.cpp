@@ -47,7 +47,7 @@ TEST_CASE("covidx-build help and version") {
   CHECK(output.find("--regions") != std::string::npos);
   output.clear();
   CHECK(run_build("--version", &output) == 0);
-  CHECK(output == "covidx-build 0.1.0 (format 1.0.0)\n");
+  CHECK(output == "covidx-build 0.1.1 (format 1.0.0)\n");
 }
 
 TEST_CASE("covidx-build usage errors exit 1") {

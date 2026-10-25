@@ -110,7 +110,7 @@ TEST_CASE("manifest round-trips with full and partial scope") {
 TEST_CASE("manifest is canonical") {
   const std::string text = valid_manifest().to_json();
   CHECK(text.starts_with(
-      "{\n  \"builder_version\": \"0.1.0\",\n  \"contigs\": [\n"));
+      "{\n  \"builder_version\": \"0.1.1\",\n  \"contigs\": [\n"));
   CHECK(text.ends_with("}\n"));
   CHECK(text.find("\"generated\"") == std::string::npos);
   CHECK(text.find("\n\n") == std::string::npos);

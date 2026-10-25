@@ -78,7 +78,7 @@ TEST_CASE("covidx-query help and version") {
   CHECK(output.find("--window") != std::string::npos);
   output.clear();
   CHECK(run_query("--version", &output) == 0);
-  CHECK(output == "covidx-query 0.1.0 (format 1.0.0)\n");
+  CHECK(output == "covidx-query 0.1.1 (format 1.0.0)\n");
 }
 
 TEST_CASE("covidx-query list modes") {

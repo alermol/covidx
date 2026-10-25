@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1 — 2026-10-25
+
+- Make real-BAM parity validation non-vacuous with bounded regions, sample
+  filtering, index policy checks, and explicit empty-run handling.
+- Document read-rich validation data and the limits of the supplied BAMs.
+- No library or CLI behavior changes; format remains 1.0.0.
+
 ## 0.1.0 — 2026-10-25
 
 - Initial C++23 coverage index implementation.
