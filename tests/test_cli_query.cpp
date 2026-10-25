@@ -105,43 +105,39 @@ TEST_CASE("covidx-query exact region and tiling output") {
   std::string output;
   CHECK(run_query("--index " + quoted(index) + " --unit S1 --region chr1:1-10",
                   &output) == 0);
-  CHECK(output ==
-        "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
-        "covered_fraction\n"
-        "chr1\t0\t10\tS1\t1\t10\t0\t1.000000\n");
+  CHECK(output == "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
+                  "covered_fraction\n"
+                  "chr1\t0\t10\tS1\t1\t10\t0\t1.000000\n");
 
   output.clear();
   CHECK(run_query("--index " + quoted(index) +
                       " --unit S1 --region chr1:1-1000 --window 400 --step 400",
                   &output) == 0);
-  CHECK(output ==
-        "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
-        "covered_fraction\n"
-        "chr1\t0\t400\tS1\t1\t10\t390\t0.025000\n"
-        "chr1\t400\t800\tS1\t3\t30\t370\t0.075000\n"
-        "chr1\t800\t1000\tS1\t2\t20\t180\t0.100000\n");
+  CHECK(output == "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
+                  "covered_fraction\n"
+                  "chr1\t0\t400\tS1\t1\t10\t390\t0.025000\n"
+                  "chr1\t400\t800\tS1\t3\t30\t370\t0.075000\n"
+                  "chr1\t800\t1000\tS1\t2\t20\t180\t0.100000\n");
 
   output.clear();
   CHECK(run_query("--index " + quoted(index) + " --unit S1 --window 400",
                   &output) == 0);
-  CHECK(output ==
-        "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
-        "covered_fraction\n"
-        "chr1\t0\t400\tS1\t1\t10\t390\t0.025000\n"
-        "chr1\t400\t800\tS1\t3\t30\t370\t0.075000\n"
-        "chr1\t800\t1000\tS1\t2\t20\t180\t0.100000\n"
-        "chr2\t0\t400\tS1\t0\t0\t400\t0.000000\n"
-        "chr2\t400\t500\tS1\t0\t0\t100\t0.000000\n");
+  CHECK(output == "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
+                  "covered_fraction\n"
+                  "chr1\t0\t400\tS1\t1\t10\t390\t0.025000\n"
+                  "chr1\t400\t800\tS1\t3\t30\t370\t0.075000\n"
+                  "chr1\t800\t1000\tS1\t2\t20\t180\t0.100000\n"
+                  "chr2\t0\t400\tS1\t0\t0\t400\t0.000000\n"
+                  "chr2\t400\t500\tS1\t0\t0\t100\t0.000000\n");
 
   output.clear();
   CHECK(run_query("--index " + quoted(index) +
                       " --unit S1 --window 400 --step 600 --contig chr1",
                   &output) == 0);
-  CHECK(output ==
-        "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
-        "covered_fraction\n"
-        "chr1\t0\t400\tS1\t1\t10\t390\t0.025000\n"
-        "chr1\t600\t1000\tS1\t3\t30\t370\t0.075000\n");
+  CHECK(output == "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
+                  "covered_fraction\n"
+                  "chr1\t0\t400\tS1\t1\t10\t390\t0.025000\n"
+                  "chr1\t600\t1000\tS1\t3\t30\t370\t0.075000\n");
 
   // A window wider than the region must clamp, not overflow the tiling
   // arithmetic. The region starts at a non-zero coordinate so the old
@@ -152,10 +148,9 @@ TEST_CASE("covidx-query exact region and tiling output") {
           "--index " + quoted(index) +
               " --unit S1 --region chr1:101-1000 --window 18446744073709551615",
           &output) == 0);
-  CHECK(output ==
-        "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
-        "covered_fraction\n"
-        "chr1\t100\t1000\tS1\t5\t50\t850\t0.055556\n");
+  CHECK(output == "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
+                  "covered_fraction\n"
+                  "chr1\t100\t1000\tS1\t5\t50\t850\t0.055556\n");
 }
 
 TEST_CASE("covidx-query reads BED before truncating the output path") {
@@ -217,12 +212,11 @@ TEST_CASE("covidx-query BED parsing and validation") {
   CHECK(
       run_query("--index " + quoted(index) + " --unit S1 --bed " + quoted(bed),
                 &output) == 0);
-  CHECK(output ==
-        "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
-        "covered_fraction\n"
-        "chr1\t0\t10\tS1\t1\t10\t0\t1.000000\n"
-        "chr1\t10\t20\tS1\t0\t0\t10\t0.000000\n"
-        "chr1\t0\t1000\tS1\t6\t60\t940\t0.060000\n");
+  CHECK(output == "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
+                  "covered_fraction\n"
+                  "chr1\t0\t10\tS1\t1\t10\t0\t1.000000\n"
+                  "chr1\t10\t20\tS1\t0\t0\t10\t0.000000\n"
+                  "chr1\t0\t1000\tS1\t6\t60\t940\t0.060000\n");
 
   output.clear();
   const std::string stdin_command = "printf 'chr1\\t0\\t10\\n' | " +
@@ -301,23 +295,21 @@ TEST_CASE("covidx-query partial scope tiling and errors") {
   std::string output;
   CHECK(run_query("--index " + quoted(index) + " --unit S1 --window 300",
                   &output) == 0);
-  CHECK(output ==
-        "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
-        "covered_fraction\n"
-        "chr1\t100\t400\tS1\t0\t0\t300\t0.000000\n"
-        "chr1\t400\t650\tS1\t3\t30\t220\t0.120000\n"
-        "chr1\t900\t1000\tS1\t1\t10\t90\t0.100000\n"
-        "chr2\t0\t300\tS1\t0\t0\t300\t0.000000\n"
-        "chr2\t300\t500\tS1\t0\t0\t200\t0.000000\n");
+  CHECK(output == "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
+                  "covered_fraction\n"
+                  "chr1\t100\t400\tS1\t0\t0\t300\t0.000000\n"
+                  "chr1\t400\t650\tS1\t3\t30\t220\t0.120000\n"
+                  "chr1\t900\t1000\tS1\t1\t10\t90\t0.100000\n"
+                  "chr2\t0\t300\tS1\t0\t0\t300\t0.000000\n"
+                  "chr2\t300\t500\tS1\t0\t0\t200\t0.000000\n");
   output.clear();
   CHECK(run_query("--index " + quoted(index) +
                       " --unit S1 --region chr1:101-650 --window 300",
                   &output) == 0);
-  CHECK(output ==
-        "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
-        "covered_fraction\n"
-        "chr1\t100\t400\tS1\t0\t0\t300\t0.000000\n"
-        "chr1\t400\t650\tS1\t3\t30\t220\t0.120000\n");
+  CHECK(output == "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
+                  "covered_fraction\n"
+                  "chr1\t100\t400\tS1\t0\t0\t300\t0.000000\n"
+                  "chr1\t400\t650\tS1\t3\t30\t220\t0.120000\n");
   CHECK(run_query("--index " + quoted(index) +
                   " --unit S1 --region chr1 2>/dev/null") == 2);
   CHECK(run_query("--index " + quoted(index) +
@@ -381,9 +373,8 @@ TEST_CASE("covidx-query option validation exits 1") {
 
 TEST_CASE("covidx-query always outputs feature counts") {
   tests::TempDir temp;
-  const fs::path features =
-      make_tiny_index(temp.path() / "features",
-                      "--layout both --group trio=S1,S2");
+  const fs::path features = make_tiny_index(temp.path() / "features",
+                                            "--layout both --group trio=S1,S2");
   std::string output;
   CHECK(run_query("--index " + quoted(features) +
                       " --unit S1 --region chr1:1-1000",
@@ -403,10 +394,9 @@ TEST_CASE("covidx-query always outputs feature counts") {
   CHECK(
       run_query("--index " + quoted(features) + " --unit S1 --region chr1:1-10",
                 &output) == 0);
-  CHECK(output ==
-        "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
-        "covered_fraction\n"
-        "chr1\t0\t10\tS1\t1\t10\t0\t1.000000\n");
+  CHECK(output == "#chrom\tstart\tend\tunit\tnum_features\tcovered\tuncovered\t"
+                  "covered_fraction\n"
+                  "chr1\t0\t10\tS1\t1\t10\t0\t1.000000\n");
 }
 
 TEST_CASE("covidx-query loading options") {

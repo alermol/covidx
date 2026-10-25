@@ -99,8 +99,7 @@ TEST_CASE("covidx-build always stores feature counts") {
   CHECK(index.feature_count("S2", "chr1", 200, 212) == 1);
 
   CHECK(run_build("--bam " + quoted(tiny_bam()) + " --out " +
-                  quoted(temp.path() / "rejected") + " --feature-counts") ==
-        1);
+                  quoted(temp.path() / "rejected") + " --feature-counts") == 1);
 }
 
 TEST_CASE("covidx-build layouts, groups, and groups-file") {

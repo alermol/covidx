@@ -296,8 +296,8 @@ int main(int argc, char** argv) {
     cli::Args args(argc, argv,
                    {"index", "unit", "bed", "region", "window", "step",
                     "contig", "output", "validation"},
-                   {"one-based", "zero-based", "no-header", "mmap",
-                    "no-mmap", "validate-crc", "no-validate-crc", "list-units",
+                   {"one-based", "zero-based", "no-header", "mmap", "no-mmap",
+                    "validate-crc", "no-validate-crc", "list-units",
                     "list-contigs", "version", "help"});
 
     if (args.flag("help")) {

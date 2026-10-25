@@ -64,8 +64,7 @@ TEST_CASE("spool builds are byte-identical for 1/2/8 threads") {
   tests::TempDir parent;
 
   BuildWorkspace one(parent.path().string(), false);
-  const BuildStats stats_one =
-      run_with_threads(header, options, 1, one, units);
+  const BuildStats stats_one = run_with_threads(header, options, 1, one, units);
   const auto files_one = snapshot(one.root());
 
   for (unsigned threads : {2u, 8u}) {
